@@ -7,80 +7,11 @@ import org.lwjgl.opengl.GL20
 import org.lwjgl.opengl.GL30
 
 
-trait Light{
-  def posWorld: Vec3f
-  def posCamera: Vec3f
-}
-
-case class MutableLight(var posWorld: Vec3f, var posCamera: Vec3f) extends Light {
-  def updateCameraPos(worldToCamera: Mat4f) {
-    posCamera = (worldToCamera * posWorld.toVec4f).toVec3f
-  }
-}
 
 
-
-/**
- * Abstraction of a shader program that uses VNC data
- */
-trait VNCProg {
-  def attrLocPos: Int
-  def attrLocNormal: Int
-  def attrLocColor: Int
-  def use()
-  def setProjection(P: Mat4f, callUseProgram: Boolean = true)
-  def setModelview(V: Mat4f, callUseProgram: Boolean = true)
-  def setLights(lights: List[Light])
-}
-
-
-/**
- * Concrete shader program for Gaussian lighting
- */
-class VNCProgGaussianLighting extends VNCProg {
-  val prog = ShaderProgram("data/shaders/GaussianLighting")
-
-  val attrLocPos    = prog.getAttributeLocation("position")
-  val attrLocNormal = prog.getAttributeLocation("normal")
-  val attrLocColor  = prog.getAttributeLocation("inDiffuseColor")
-  
-  val unifLocCameraToClipMatrix        = prog.getUniformLocation("cameraToClipMatrix")
-  val unifLocModelToCameraMatrix       = prog.getUniformLocation("modelToCameraMatrix")
-  val unifLocNormalModelToCameraMatrix = prog.getUniformLocation("normalModelToCameraMatrix")
-  val unifLocCameraSpaceLightPos1      = prog.getUniformLocation("cameraSpaceLightPos")
-  
-  def use() = prog.use()
-  
-  def setProjection(P: Mat4f, callUseProgram: Boolean = true) {
-    if (callUseProgram) prog.use() // must be active to set uniforms!!! otherwise GL error 1282...
-    prog.setUniform(unifLocCameraToClipMatrix, P)
-  }
-  
-  def setModelview(V: Mat4f, callUseProgram: Boolean = true) {
-    if (callUseProgram) prog.use() // must be active to set uniforms!!! otherwise GL error 1282...
-    prog.setUniform(unifLocModelToCameraMatrix, V)
-    prog.setUniform(unifLocNormalModelToCameraMatrix, Mat3f.createFromMat4f(V).inverse().transpose())
-  }
-  
-  def setLights(lights: List[Light]) {
-    lights match {
-      case l1 :: Nil => prog.setUniform(unifLocCameraSpaceLightPos1, l1.posCamera)
-      case _ => 
-    }
-  }
-}
-
-
-
-
-trait VertexDescription {
-  
-}
 
 
 trait VertexData {
-  
-  type VertexDesc <: VertexDescription
   
   val rawData: Array[Float]
   val primitiveType: Int
@@ -89,113 +20,34 @@ trait VertexData {
   // convenience functions derived from floatsPerVertex
   val numVertices = rawData.length / floatsPerVertex
   val strideInBytes = floatsPerVertex * 4
-}
-
-class VertexData3D_NC extends VertexData {
   
-}
-
-
-/**
- * A simple VBO wrapper that can take an array of vertices 
- * with the following per-vertex-information:
- * 
- * position (3 Floats) + normal (3 Floats) + color (4 Floats) 
- */
-class SimpleVbo(arrayPNC: Array[Float], primitiveType: Int = GL11.GL_TRIANGLES) {
+  def setVertexAttribArrayAndPointer(shader: Shader)
   
-  val prog = ShaderProgram("shaders/GaussianLighting")
-  
-  val attribPos = prog.getAttributeLocation("position")
-  val attribNrm = prog.getAttributeLocation("normal")
-  val attribCol = prog.getAttributeLocation("inDiffuseColor")
-  
-  val floatsPerVertex = 3 + 3 + 4
-  val numVertices = arrayPNC.length / floatsPerVertex
-  val strideInBytes = floatsPerVertex * 4
-
-  // initialize a VAO and bind it
-  val vao = GL30.glGenVertexArrays()
-  GL30.glBindVertexArray(vao)
-
-  // initialize the VBO and bind it
-  val vbId = GL15.glGenBuffers()
-  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
-
-  // make the attribute bindings
-  // that is where the association between the VAO and the current GL_ARRAY_BUFFER is evaluated and stored
-  GL20.glEnableVertexAttribArray(attribPos)
-  GL20.glEnableVertexAttribArray(attribNrm)
-  GL20.glEnableVertexAttribArray(attribCol)
-  GlWrapper.checkGlError("after enabling vertex attrib array")
-  GL20.glVertexAttribPointer(attribPos, 3, GL_FLOAT, false, strideInBytes, 0)
-  GL20.glVertexAttribPointer(attribNrm, 3, GL_FLOAT, false, strideInBytes, 12)
-  GL20.glVertexAttribPointer(attribCol, 4, GL_FLOAT, false, strideInBytes, 24)
-  GlWrapper.checkGlError("after setting the attrib pointers")
-  
-  // buffer the static vertex data
-  GL15.glBufferData(GL15.GL_ARRAY_BUFFER, ScalaBufferUtils.convertToFloatBuffer(arrayPNC), GL15.GL_STATIC_DRAW)
-  GlWrapper.checkGlError("after buffering the data")
-  
-  // unbind everything
-  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0)
-  GL30.glBindVertexArray(0)
-  GlWrapper.checkGlError("after clean up")
-  
-  
-  def setMatrices(P: Mat4f, V: Mat4f) {
-    prog.use() // must be active to set uniforms!!! otherwise GL error 1282...
-    prog.setUniform("cameraToClipMatrix", P)
-    prog.setUniform("modelToCameraMatrix", V)
-    prog.setUniform("normalModelToCameraMatrix", Mat3f.createFromMat4f(V).inverse().transpose())
-    GlWrapper.checkGlError()
-  }
-  
-  def render() {
-    // bind
-    //GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
-    GL30.glBindVertexArray(vao)
-    GlWrapper.checkGlError("after binding VAO")
-    
-    prog.use()
-    GlWrapper.checkGlError("after switching to shader")
-    //prog.switchBackToFixedPipeline
-
-    // draw
-    GL11.glDrawArrays(primitiveType, 0, numVertices)
-    GlWrapper.checkGlError("after drawing")
-    
-    // unbind
-    GL30.glBindVertexArray(0)
-    GlWrapper.checkGlError("finished rendering")
-  }
-  
+  def ++(that: VertexData): VertexData
 }
 
 
 
-/**
- * Collection vertex data generators for a few basic shapes
- * 
- * The returned vertex arrays have the following per-vertex-information:
- * 
- * position (3 Floats) + normal (3 Floats) + color (4 Floats) 
- */
-object VertexDataGenVNC {
-  
-  /**
-   * For convenience: Implicit conversion for transforming
-   */
-  implicit class TransformableArray(vertexData: Array[Float]) {
+class VertexData3D_NC(val rawData: Array[Float], val primitiveType: Int = GL11.GL_TRIANGLES) extends VertexData {
 
-    def transformVNC(modMatrixPos: Mat4f, modMatrixNrm: Mat3f): Array[Float] = 
-      VertexDataGenVNC.transform(vertexData, modMatrixPos, modMatrixNrm)
-    
-    def transformVNC(modMatrixPos: Mat4f): Array[Float] = 
-      VertexDataGenVNC.transform(vertexData, modMatrixPos)
-    
-    def transfromSimpleVNC(modMatrixPos: Mat4f): Array[Float] = 
-      VertexDataGenVNC.transformSimple(vertexData, modMatrixPos)
+  val floatsPerVertex = 10
+  assert(rawData.length % floatsPerVertex == 0)
+  
+  def ++(that: VertexData): VertexData3D_NC = new VertexData3D_NC(this.rawData ++ that.rawData)
+  
+  def setVertexAttribArrayAndPointer(shader: Shader) {
+    shader.vertexAttributes match {
+      case va: VertexAttributes with HasVrtxAttrPos3D with HasVrtxAttrNormal with HasVrtxAttrColor =>
+        GL20.glEnableVertexAttribArray(va.locPos3D)
+        GL20.glEnableVertexAttribArray(va.locNormal)
+        GL20.glEnableVertexAttribArray(va.locColor)
+        GlWrapper.checkGlError("after enabling vertex attrib array")
+        GL20.glVertexAttribPointer(va.locPos3D,  3, GL_FLOAT, false, strideInBytes, 0)
+        GL20.glVertexAttribPointer(va.locNormal, 3, GL_FLOAT, false, strideInBytes, 12)
+        GL20.glVertexAttribPointer(va.locColor,  4, GL_FLOAT, false, strideInBytes, 24)
+        GlWrapper.checkGlError("after setting the attrib pointers")
+      case _ => throw new Exception("Shader does not provide required vertex attributes")
+    }
   }
   
   /**
@@ -206,17 +58,14 @@ object VertexDataGenVNC {
    * the same, therefore the most general form requires two transformation matrices, 
    * which is obviously annoying. See below for alternatives.
    */
-  def transform(vertexData: Array[Float], modMatrixPos: Mat4f, modMatrixNrm: Mat3f): Array[Float] = {
-    val numEntriesPerVertex = 10
-    assert(vertexData.length % numEntriesPerVertex == 0)
+  def transform(modMatrixPos: Mat4f, modMatrixNrm: Mat3f): VertexData3D_NC = {
 
-    val newVertexData = vertexData.clone()
+    val newVertexData = rawData.clone()
     
-    val numVertices = vertexData.length / numEntriesPerVertex
     for (ii <- Range(0, numVertices)) {
-      val i = ii*numEntriesPerVertex
-      val pos = new Vec4f(vertexData(i)  , vertexData(i+1), vertexData(i+2), 1f)
-      val nrm = new Vec3f(vertexData(i+3), vertexData(i+4), vertexData(i+5))
+      val i = ii*floatsPerVertex
+      val pos = new Vec4f(rawData(i)  , rawData(i+1), rawData(i+2), 1f)
+      val nrm = new Vec3f(rawData(i+3), rawData(i+4), rawData(i+5))
       
       val newPos = modMatrixPos * pos
       val newNrm = modMatrixNrm * nrm
@@ -229,31 +78,88 @@ object VertexDataGenVNC {
       newVertexData(i+5) = newNrm.z
     }
     
-    return newVertexData
+    return new VertexData3D_NC(newVertexData, primitiveType)
   }
   
   /**
    * This provides a simplified interface of the above transformation.
    * The normal transformation matrix is calculated internally by taking the inverse transpose.
    */
-  def transform(vertexData: Array[Float], modMatrixPos: Mat4f): Array[Float] = {
+  def transform(modMatrixPos: Mat4f): VertexData3D_NC = {
     val modMatrixNrm = Mat3f.createFromMat4f(modMatrixPos).inverse().transpose()
-    transform(vertexData, modMatrixPos, modMatrixNrm)
+    transform(modMatrixPos, modMatrixNrm)
   }
 
   /**
    * In case our transformations have uniform scale the above is overkill;
    * we can simply use the position transformation matrix for normals as well
    */
-  def transformSimple(vertexData: Array[Float], modMatrixPos: Mat4f): Array[Float] = {
-    transform(vertexData, modMatrixPos, Mat3f.createFromMat4f(modMatrixPos))
+  def transformSimple(modMatrixPos: Mat4f): VertexData3D_NC = {
+    transform(modMatrixPos, Mat3f.createFromMat4f(modMatrixPos))
+  }  
+}
+
+
+
+
+/**
+ * VBO wrapper for static vertex data
+ */
+class StaticVbo(vertexData: VertexData, shader: Shader) {
+  
+  // initialize a VAO and bind it
+  val vao = GL30.glGenVertexArrays()
+  GL30.glBindVertexArray(vao)
+
+  // initialize the VBO and bind it
+  val vbId = GL15.glGenBuffers()
+  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
+
+  // make the attribute bindings
+  // that is where the association between the VAO and the current GL_ARRAY_BUFFER is evaluated and stored
+  vertexData.setVertexAttribArrayAndPointer(shader)
+  
+  // buffer the static vertex data
+  GL15.glBufferData(GL15.GL_ARRAY_BUFFER, ScalaBufferUtils.convertToFloatBuffer(vertexData.rawData), GL15.GL_STATIC_DRAW)
+  GlWrapper.checkGlError(getClass + " -- after buffering the data")
+  
+  // unbind everything
+  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0)
+  GL30.glBindVertexArray(0)
+  GlWrapper.checkGlError(getClass + " -- after clean up")
+  
+  
+  def render() {
+    // bind
+    //GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
+    GL30.glBindVertexArray(vao)
+    GlWrapper.checkGlError(getClass + " -- after binding VAO")
+    
+    shader.use()
+    GlWrapper.checkGlError(getClass + " -- after switching to shader")
+    //prog.switchBackToFixedPipeline
+
+    // draw
+    GL11.glDrawArrays(vertexData.primitiveType, 0, vertexData.numVertices)
+    GlWrapper.checkGlError(getClass + " -- after drawing")
+    
+    // unbind
+    GL30.glBindVertexArray(0)
+    GlWrapper.checkGlError(getClass + " -- finished rendering")
   }
   
+}
+
+
+
+/**
+ * Collection of vertex data generators for a few basic shapes.
+ * Return VertexData is of type VertexData3D_NC
+ */
+object VertexDataGen3D_NC {
   
-  // some shorthand to simplify notation
-  
+  // some shorthands to simplify notation
   type V = Vec3f
-  
   case class C(r: Float, g: Float, b: Float, a: Float) {
     def arr = Array(r, g, b, a)
   }
@@ -262,7 +168,7 @@ object VertexDataGenVNC {
   /**
    * Generic cube
    */  
-  def cubeVNC(x1: Float, x2: Float, y1: Float, y2: Float, z1: Float, z2: Float, color: Color): Array[Float] = {
+  def cube(x1: Float, x2: Float, y1: Float, y2: Float, z1: Float, z2: Float, color: Color): VertexData3D_NC = {
     val p1 = Vec3f(x1 min x2, y1 min y2, z1 max z2)
     val p2 = Vec3f(x1 max x2, y1 min y2, z1 max z2)
     val p3 = Vec3f(x1 min x2, y1 max y2, z1 max z2)
@@ -291,7 +197,7 @@ object VertexDataGenVNC {
       // bottom face
       p1.arr ++ Vec3f(0,-1,0).arr ++ carr    ++    p5.arr ++ Vec3f(0,-1,0).arr ++ carr    ++    p6.arr ++ Vec3f(0,-1,0).arr ++ carr ++
       p6.arr ++ Vec3f(0,-1,0).arr ++ carr    ++    p2.arr ++ Vec3f(0,-1,0).arr ++ carr    ++    p1.arr ++ Vec3f(0,-1,0).arr ++ carr
-    return triangles
+    return new VertexData3D_NC(triangles)
   }
   
   /**
@@ -301,7 +207,7 @@ object VertexDataGenVNC {
    * y     corresponds to     cylinder axis (with top a +h and bottom at -h)
    * 
    */
-  def cylinderVNC(r: Float, h: Float, color: Color, slices: Int = 4, wallOnly: Boolean = false): Array[Float] = {
+  def cylinder(r: Float, h: Float, color: Color, slices: Int = 4, wallOnly: Boolean = false): VertexData3D_NC = {
     val carr = color.toArr
     
     val circularIndices = Range(0, slices).toArray :+ 0                                             // eg 0,1,2,3,0
@@ -323,7 +229,7 @@ object VertexDataGenVNC {
       p3.arr ++ normalJ.arr ++ carr    ++    p4.arr ++ normalI.arr ++ carr    ++    p1.arr ++ normalI.arr ++ carr
     }
     if (wallOnly) {
-      return wallTriangles
+      return new VertexData3D_NC(wallTriangles)
     }
     
     // generate planes:
@@ -338,9 +244,9 @@ object VertexDataGenVNC {
       triangles
     }
 
-    wallTriangles ++ planes(0) ++ planes(1)
+    return new VertexData3D_NC(wallTriangles ++ planes(0) ++ planes(1))
   }
-  def cylinderTwoColorsVNC(r: Float, h: Float, colorBottom: Color, colorTop: Color, slices: Int = 4, wallOnly: Boolean = false): Array[Float] = {
+  def cylinderTwoColors(r: Float, h: Float, colorBottom: Color, colorTop: Color, slices: Int = 4, wallOnly: Boolean = false): VertexData3D_NC = {
     val carrB = colorBottom.toArr
     val carrT = colorTop.toArr
     
@@ -363,7 +269,7 @@ object VertexDataGenVNC {
       p3.arr ++ normalJ.arr ++ carrT    ++    p4.arr ++ normalI.arr ++ carrT    ++    p1.arr ++ normalI.arr ++ carrB
     }
     if (wallOnly) {
-      return wallTriangles
+      return new VertexData3D_NC(wallTriangles)
     }
     
     // generate planes:
@@ -378,13 +284,13 @@ object VertexDataGenVNC {
       triangles
     }
 
-    wallTriangles ++ planes(0) ++ planes(1)
+    return new VertexData3D_NC(wallTriangles ++ planes(0) ++ planes(1))
   }
   
   /**
    * A "line" is a thin cylinder connecting two arbitrary points in space
    */
-  def lineVNC(r: Float, p1: Vec3f, p2: Vec3f, color1: Color, color2: Color, slices: Int = 4, wallOnly: Boolean = false): Array[Float] = {
+  def line(r: Float, p1: Vec3f, p2: Vec3f, color1: Color, color2: Color, slices: Int = 4, wallOnly: Boolean = false): VertexData3D_NC = {
     
     val p1_to_p2 = p2 - p1
     val p1_to_p2_norm = p1_to_p2.normalize
@@ -392,7 +298,7 @@ object VertexDataGenVNC {
     val mid = p1 mid p2
     val halfLength = p1_to_p2.length / 2
     
-    val cylinder = cylinderTwoColorsVNC(r, halfLength, color1, color2, slices, wallOnly)
+    val cylinder = cylinderTwoColors(r, halfLength, color1, color2, slices, wallOnly)
     
     val cylNorm = Vec3f(0, 1, 0)
     val rotAxis = p1_to_p2_norm cross cylNorm
@@ -400,14 +306,14 @@ object VertexDataGenVNC {
     
     //println(rotAngl, rotAngl*180/math.Pi.toFloat, rotAxis)
     
-    cylinder.transformVNC(Mat4f.translate(mid.x, mid.y, mid.z).rotate(-rotAngl*180/math.Pi.toFloat, rotAxis.x, rotAxis.y, rotAxis.z))
+    return cylinder.transform(Mat4f.translate(mid.x, mid.y, mid.z).rotate(-rotAngl*180/math.Pi.toFloat, rotAxis.x, rotAxis.y, rotAxis.z))
   }
   
   /**
    * Generic disk
    * Convention: centered at y=0, with normal in +y direction
    */
-  def discVNC(r: Float, color: Color, slices: Int = 16): Array[Float] = {
+  def discVNC(r: Float, color: Color, slices: Int = 16): VertexData3D_NC = {
     val carr = color.toArr
     
     val circularIndices = Range(0, slices).toArray :+ 0                                             // eg 0,1,2,3,0
@@ -428,13 +334,13 @@ object VertexDataGenVNC {
       }
       triangles
     }
-    disc
+    return new VertexData3D_NC(disc)
   }  
   
   /**
    * Generic sphere
    */
-  def sphereVNC(r: Float, color: Color, numRecursions: Int = 4): Array[Float] = {
+  def sphere(r: Float, color: Color, numRecursions: Int = 4): VertexData3D_NC = {
     val carr = color.toArr
 
     val p1 = Vec3f(0, -r, 0)
@@ -479,12 +385,13 @@ object VertexDataGenVNC {
     
     def vecToNormal(p: Vec3f) = p / r
 
-    refinedTriangles.toArray.flatMap{vertices => 
+    val allTriangles = refinedTriangles.toArray.flatMap{vertices => 
       vertices._1.arr ++ vecToNormal(vertices._1).arr ++ carr ++
       vertices._2.arr ++ vecToNormal(vertices._2).arr ++ carr ++
       vertices._3.arr ++ vecToNormal(vertices._3).arr ++ carr
     }
     
+    return new VertexData3D_NC(allTriangles)
   }
   
 
@@ -494,7 +401,8 @@ object VertexDataGenVNC {
    * Simplified over the generic cube in the sense that it is always centered at 0,
    * i.e., size is specified in "half width"
    */  
-  def roundedCubeVNC(hwx: Float, hwy: Float, hwz: Float, r: Float, color: Color, detail: Int = 4): Array[Float] = {
+  /*
+  def roundedCubeVNC(hwx: Float, hwy: Float, hwz: Float, r: Float, color: Color, detail: Int = 4): VertexData3D_NC = {
     val p1 = Vec3f(-hwx, -hwy, +hwz)
     val p2 = Vec3f(+hwx, -hwy, +hwz)
     val p3 = Vec3f(-hwx, +hwy, +hwz)
@@ -530,7 +438,7 @@ object VertexDataGenVNC {
     val hwyr = hwy-r
     val hwzr = hwz-r
 
-    val cylinderY = cylinderVNC(r, hwyr, color, detail*4, true)
+    val cylinderY = cylinderVNC(r, hwyr, color, detail*4, true).rawData
     val lengthOfBlock = cylinderY.length / 4
 
     val cylinderYp2p4 = Array.tabulate(lengthOfBlock)(i => cylinderY(0*lengthOfBlock + i)).transfromSimpleVNC(Mat4f.translate(+hwxr, 0, +hwzr))
@@ -574,7 +482,7 @@ object VertexDataGenVNC {
                         sphere1 ++ sphere2 ++ sphere3 ++ sphere4 ++ sphere5 ++ sphere6 ++ sphere7 ++ sphere8
   }
 
-  
+  */
   
 }
 

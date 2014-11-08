@@ -22,7 +22,7 @@ import com.oculusvr.capi.RenderAPIConfig
 import com.oculusvr.capi.Texture
 import com.sun.jna.Structure
 
-import VertexDataGenVNC._
+//import VertexDataGenVNC._
 
 
 object RiftExample {
@@ -171,7 +171,7 @@ object RiftExample {
       if (!(math.abs(x) < 0.5 && math.abs(y) < 0.5 && math.abs(z) < 0.5))
     } yield {
       val ipd = 0.0325f
-      VertexDataGenVNC.cubeVNC(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_CELESTIAL_BLUE).transfromSimpleVNC(Mat4f.translate(x, y, z))
+      VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_CELESTIAL_BLUE).transformSimple(Mat4f.translate(x, y, z))
     }
     val dist = 3
     val cubeOfCubes = for {
@@ -181,9 +181,12 @@ object RiftExample {
       if ((math.abs(x) max math.abs(y) max math.abs(z)) > 0.99*dist)
     } yield {
       val ipd = 0.0325f * 2
-      VertexDataGenVNC.cubeVNC(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transfromSimpleVNC(Mat4f.translate(x, y, z))
+      VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transformSimple(Mat4f.translate(x, y, z))
     }
       
+    
+    val shader = new DefaultLightingShader()
+    
     val vbo = 
       //new VboCube(0, 0, 0, 1, 1, 1)
       //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.cubeVNC(-1, +1, -1, +1, +1, -1, Color.COLOR_CELESTIAL_BLUE))
@@ -191,7 +194,7 @@ object RiftExample {
       //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.sphereVNC(1, Color.COLOR_FERRARI_RED, 4))
       //new StaticVboGaussianShaderVNC(VertexDataGenVNC.sphereVNC(1, Color.COLOR_FERRARI_RED, 4))
       //new StaticVboGaussianShaderVNC(VertexDataGenVNC.roundedCubeVNC(1, 2, 3, 0.2f, Color.COLOR_FERRARI_RED, 8))
-      new SimpleVbo(cubeOfCubes.flatten.toArray)
+      new StaticVbo(cubeOfCubes.reduce(_ ++ _), shader)
     
     var renderMode = 'direct
     var modelR = Mat4f.createIdentity
@@ -218,7 +221,9 @@ object RiftExample {
       //Color.glColorWrapper(Color.COLOR_FERRARI_RED)
       //drawBox(-1, +1, -1, +1, -1, +1)
       GlWrapper.checkGlError("before rendering of the cube")
-      vbo.setMatrices(P, (V*modelT*modelR*modelS))
+      shader.use()
+      shader.setProjection(P)
+      shader.setModelview(V*modelT*modelR*modelS)
       vbo.render()
       
       //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
