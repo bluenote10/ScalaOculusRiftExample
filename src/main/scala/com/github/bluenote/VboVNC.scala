@@ -7,6 +7,93 @@ import org.lwjgl.opengl.GL20
 import org.lwjgl.opengl.GL30
 
 
+trait Light{
+  def posWorld: Vec3f
+  def posCamera: Vec3f
+}
+
+case class MutableLight(var posWorld: Vec3f, var posCamera: Vec3f) extends Light {
+  def updateCameraPos(worldToCamera: Mat4f) {
+    posCamera = (worldToCamera * posWorld.toVec4f).toVec3f
+  }
+}
+
+
+
+/**
+ * Abstraction of a shader program that uses VNC data
+ */
+trait VNCProg {
+  def attrLocPos: Int
+  def attrLocNormal: Int
+  def attrLocColor: Int
+  def use()
+  def setProjection(P: Mat4f, callUseProgram: Boolean = true)
+  def setModelview(V: Mat4f, callUseProgram: Boolean = true)
+  def setLights(lights: List[Light])
+}
+
+
+/**
+ * Concrete shader program for Gaussian lighting
+ */
+class VNCProgGaussianLighting extends VNCProg {
+  val prog = ShaderProgram("data/shaders/GaussianLighting")
+
+  val attrLocPos    = prog.getAttributeLocation("position")
+  val attrLocNormal = prog.getAttributeLocation("normal")
+  val attrLocColor  = prog.getAttributeLocation("inDiffuseColor")
+  
+  val unifLocCameraToClipMatrix        = prog.getUniformLocation("cameraToClipMatrix")
+  val unifLocModelToCameraMatrix       = prog.getUniformLocation("modelToCameraMatrix")
+  val unifLocNormalModelToCameraMatrix = prog.getUniformLocation("normalModelToCameraMatrix")
+  val unifLocCameraSpaceLightPos1      = prog.getUniformLocation("cameraSpaceLightPos")
+  
+  def use() = prog.use()
+  
+  def setProjection(P: Mat4f, callUseProgram: Boolean = true) {
+    if (callUseProgram) prog.use() // must be active to set uniforms!!! otherwise GL error 1282...
+    prog.setUniform(unifLocCameraToClipMatrix, P)
+  }
+  
+  def setModelview(V: Mat4f, callUseProgram: Boolean = true) {
+    if (callUseProgram) prog.use() // must be active to set uniforms!!! otherwise GL error 1282...
+    prog.setUniform(unifLocModelToCameraMatrix, V)
+    prog.setUniform(unifLocNormalModelToCameraMatrix, Mat3f.createFromMat4f(V).inverse().transpose())
+  }
+  
+  def setLights(lights: List[Light]) {
+    lights match {
+      case l1 :: Nil => prog.setUniform(unifLocCameraSpaceLightPos1, l1.posCamera)
+      case _ => 
+    }
+  }
+}
+
+
+
+
+trait VertexDescription {
+  
+}
+
+
+trait VertexData {
+  
+  type VertexDesc <: VertexDescription
+  
+  val rawData: Array[Float]
+  val primitiveType: Int
+  val floatsPerVertex: Int
+  
+  // convenience functions derived from floatsPerVertex
+  val numVertices = rawData.length / floatsPerVertex
+  val strideInBytes = floatsPerVertex * 4
+}
+
+class VertexData3D_NC extends VertexData {
+  
+}
 
 
 /**

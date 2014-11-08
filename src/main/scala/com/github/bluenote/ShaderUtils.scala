@@ -71,7 +71,7 @@ object ShaderUtils {
 
 /**
  * Wrapper class for a shader program
- * Recompiles a shader automatically (on "use()") if the shader files have been modified.
+ * Recompiles a shader automatically (on "checkModifiedShaderAndReload()") if the shader files have been modified.
  */
 class ShaderProgram(vsFile: String, fsFile: String, automaticReloading: Boolean = true) {
 
@@ -151,14 +151,21 @@ class ShaderProgram(vsFile: String, fsFile: String, automaticReloading: Boolean 
    * Activates the shader
    */
   def use() {
-    if (automaticReloading && changeNotification.compareAndSet(true, false)) {
-      status = load()
-    }
     if (status.porperlyLoaded) {
-      GL20.glUseProgram(status.programId)
+      GlWrapper.shaderProgram.set(status.programId)
     }
   }
 
+  /**
+   * Checks if the shader files have changed and
+   * reloads the shader if need be.
+   */
+  def checkModifiedShaderAndReload() {
+    if (automaticReloading && changeNotification.compareAndSet(true, false)) {
+      status = load()
+    }
+  }
+  
   /**
    * Closes the shader
    */

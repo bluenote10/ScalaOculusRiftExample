@@ -149,9 +149,11 @@ object RiftExample {
     rc.Header.RTSize = hmd.Resolution
     rc.Header.Multisample = 1 // does not seem to have any effect
     
-    //val distortionCaps = ovrDistortionCap_Chromatic | ovrDistortionCap_TimeWarp | ovrDistortionCap_Vignette // 
-    val distortionCaps = ovrDistortionCap_Chromatic | ovrDistortionCap_Vignette
-    //val distortionCaps = ovrDistortionCap_NoSwapBuffers | ovrDistortionCap_Vignette
+    val distortionCaps = 
+      //ovrDistortionCap_NoSwapBuffers |
+      //ovrDistortionCap_TimeWarp |
+      ovrDistortionCap_Chromatic | 
+      ovrDistortionCap_Vignette
     
     GlWrapper.checkGlError("before configureRendering")
     val eyeRenderDescs = hmd.configureRendering(rc, distortionCaps, fovPorts)
@@ -182,7 +184,7 @@ object RiftExample {
       VertexDataGenVNC.cubeVNC(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transfromSimpleVNC(Mat4f.translate(x, y, z))
     }
       
-    val cube = 
+    val vbo = 
       //new VboCube(0, 0, 0, 1, 1, 1)
       //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.cubeVNC(-1, +1, -1, +1, +1, -1, Color.COLOR_CELESTIAL_BLUE))
       //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.cylinderVNC(1, 1, Color.COLOR_FERRARI_RED, 32))
@@ -216,8 +218,8 @@ object RiftExample {
       //Color.glColorWrapper(Color.COLOR_FERRARI_RED)
       //drawBox(-1, +1, -1, +1, -1, +1)
       GlWrapper.checkGlError("before rendering of the cube")
-      cube.setMatrices(P, (V*modelT*modelR*modelS))
-      cube.render()
+      vbo.setMatrices(P, (V*modelT*modelR*modelS))
+      vbo.render()
       
       //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
