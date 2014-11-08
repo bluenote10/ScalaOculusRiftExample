@@ -26,7 +26,7 @@ trait Shader {
  */
 class DefaultLightingShader extends Shader {
   
-  val prog = ShaderProgram("data/shaders/GaussianLighting")
+  val prog = ShaderProgram("shaders/GaussianLighting")
 
   val vertexAttributes = new VertexAttributes with HasVrtxAttrPos3D with HasVrtxAttrNormal with HasVrtxAttrColor {
     val locPos3D  = prog.getAttributeLocation("position")

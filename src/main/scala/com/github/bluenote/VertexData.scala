@@ -10,11 +10,10 @@ trait VertexData {
   
   val rawData: Array[Float]
   val primitiveType: Int
-  val floatsPerVertex: Int
   
-  // convenience functions derived from floatsPerVertex
-  val numVertices = rawData.length / floatsPerVertex
-  val strideInBytes = floatsPerVertex * 4
+  val floatsPerVertex: Int
+  val numVertices: Int
+  val strideInBytes: Int
   
   def setVertexAttribArrayAndPointer(shader: Shader)
   
@@ -26,6 +25,9 @@ trait VertexData {
 class VertexData3D_NC(val rawData: Array[Float], val primitiveType: Int = GL11.GL_TRIANGLES) extends VertexData {
 
   val floatsPerVertex = 10
+  val numVertices = rawData.length / floatsPerVertex
+  val strideInBytes = floatsPerVertex * 4
+  
   assert(rawData.length % floatsPerVertex == 0)
   
   def ++(that: VertexData): VertexData3D_NC = new VertexData3D_NC(this.rawData ++ that.rawData)

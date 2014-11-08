@@ -27,6 +27,7 @@ import com.sun.jna.Structure
 
 object RiftExample {
 
+  /** Helper function used by initOpenGL */
   def setupContext(): ContextAttribs = {
     new ContextAttribs(3, 3)
     .withForwardCompatible(true)
@@ -34,6 +35,7 @@ object RiftExample {
     .withDebug(true)
   }
   
+  /** Helper function used by initOpenGL */
  def setupDisplay(left: Int, top: Int, width: Int, height: Int) {
     Display.setDisplayMode(new DisplayMode(width, height));
     Display.setLocation(left, top)
@@ -42,15 +44,49 @@ object RiftExample {
     //Display.setVSyncEnabled(true)
   }
  
-  def setupDisplayOld() {
+  /**
+   * Initializes OpenGL
+   * I first ran into some issues with an "invalid memory access" in configureRendering 
+   * depending on how I initialize OpenGL (probably a context issue, but this was with the old SDK). 
+   * To solve the issue I now initialize OpenGL similar to LwjglApp.run. 
+   */  
+  def initOpenGL(hmd: Hmd) {
+    // new initialization:
+    if (true) {
+      val glContext = new GLContext()
+      val contextAttribs = setupContext
+      
+      // the problem is not the width/height of the window, other values do work...
+      setupDisplay(hmd.WindowsPos.x, hmd.WindowsPos.y, hmd.Resolution.w, hmd.Resolution.h)
+      
+      // the following makes the difference: passing contextAttribs solves the "invalid memory access" issue, not passing it crashes
+      // Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8))
+      Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8), contextAttribs)
+      Display.setVSyncEnabled(false)
+      
+      // the following three things do not seem to be the cause, can be commented out?
+      GLContext.useContext(glContext, false)
+      Mouse.create()
+      Keyboard.create()    
+    } else {
+      // this is the old version that crashes (? or crashed) with an "invalid memory access" in configureRendering
+      Display.setDisplayMode(new DisplayMode(1280, 800))
+      Display.setVSyncEnabled(true)
+      Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8))     
+    }
+    println(f"OpenGL version: ${GL11.glGetString(GL11.GL_VERSION)}")
   }
  
-  def initGL() {
+  
+  /**
+   * Some general OpenGL state settings
+   */
+  def configureOpenGL() {
     glClearColor(78/255f, 115/255f, 151/255f, 0.0f)
 
-    glClearDepth(1.0f);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    glClearDepth(1.0f)
+    glEnable(GL_DEPTH_TEST)
+    glDepthFunc(GL_LEQUAL)
 
     glEnable(GL_CULL_FACE)
     glCullFace(GL_BACK) // which side should be suppressed? typically the "back" side
@@ -58,15 +94,61 @@ object RiftExample {
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+    // for wire-frame:
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    //glDisable(GL_CULL_FACE)
   }  
   
-  
+
+  /**
+   * Generates the vertex data of the scene (multiple variants)
+   */
+  def generateSceneVertexData(scene: Int = 0): VertexData = {
+    def linspace(min: Float, max: Float, numSteps: Int) = {
+      min to max by (max-min)/(numSteps-1)
+    }      
+    scene match {
+      case 0 => {
+        val numBlocks = 10
+        val dist = 3
+        val cubeOfCubes = for {
+          x <- linspace(-dist, dist, numBlocks)
+          y <- linspace(-dist, dist, numBlocks)
+          z <- linspace(-dist, dist, numBlocks)
+          if ((math.abs(x) max math.abs(y) max math.abs(z)) > 0.99*dist)
+        } yield {
+          val ipd = 0.0325f * 2
+          VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transformSimple(Mat4f.translate(x, y, z))
+        }
+        cubeOfCubes.reduce(_ ++ _)
+      }
+      case 1 => {
+        val numBlocks = 10
+        val gridOfCubes = for {
+          x <- linspace(-10, 10, numBlocks)
+          y <- linspace(-10, 10, numBlocks)
+          z <- linspace(-10, 10, numBlocks)
+          if (!(math.abs(x) < 0.5 && math.abs(y) < 0.5 && math.abs(z) < 0.5))
+        } yield {
+          val ipd = 0.0325f
+          VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_CELESTIAL_BLUE).transformSimple(Mat4f.translate(x, y, z))
+        }
+        gridOfCubes.reduce(_ ++ _)
+      }
+    }
+    
+  }
+
+  /**
+   * Main
+   */
   def main(args: Array[String]) {
     
     // load Oculus Rift
     //OvrLibrary.INSTANCE.ovr_Initialize()
+    OvrLibrary.INSTANCE.ovr_Initialize()
     Hmd.initialize()
-    Thread.sleep(400);
+    Thread.sleep(400)
     
     val hmd = 
       //Hmd.createDebug(ovrHmd_DK1)
@@ -76,40 +158,17 @@ object RiftExample {
       System.exit(-1)
     }
     
+    // set hmd caps
     hmd.setEnabledCaps(OvrLibrary.ovrHmdCaps.ovrHmdCap_LowPersistence | OvrLibrary.ovrHmdCaps.ovrHmdCap_NoVSync)
-    //val hmdDesc = hmd.getDesc()
 
-    // order copied from LwjglApp.run
-    if (true) {
-      val glContext = new GLContext()
-      val contextAttribs = setupContext
-      
-      // the problem is not the width/height of the window, other values do work...
-      setupDisplay(hmd.WindowsPos.x, hmd.WindowsPos.y, hmd.Resolution.w, hmd.Resolution.h)
-      
-      // the following makes the differes: passing contextAttribs solves the "invalid memory access" issue, not passing it crashes
-      // Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8))
-      Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8), contextAttribs)
-      Display.setVSyncEnabled(false)
-      
-      // the following three things do not seem to be the cause, can be commented out
-      GLContext.useContext(glContext, false)
-      Mouse.create()
-      Keyboard.create()    
-    } else {
-      // this is the old version that crashes with an "invalid memory access" in configureRendering
-      Display.setDisplayMode(new DisplayMode(1280, 800))
-      Display.setVSyncEnabled(true)
-      Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8))     
-    }
-    println(f"OpenGL version: ${GL11.glGetString(GL11.GL_VERSION)}")
-    initGL()
+    // initialize and configure OpenGL
+    initOpenGL(hmd)
+    configureOpenGL()
     
     // start tracking
-    // hmd.startSensor(ovrSensorCap_Orientation | ovrSensorCap_Position | ovrSensorCap_YawCorrection, ovrSensorCap_YawCorrection)
-    //hmd.startSensor(ovrSensorCap_Orientation, 0)
-    hmd.configureTracking(ovrTrackingCap_Orientation | ovrTrackingCap_Position, 0)
+    hmd.configureTracking(ovrTrackingCap_Orientation | ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0)
     
+    // prepare fovports
     val fovPorts = Array.tabulate(2)(eye => hmd.DefaultEyeFov(eye))
     val projections = Array.tabulate(2)(eye => Mat4f.createFromRowMajorArray(Hmd.getPerspectiveProjection(fovPorts(eye), 0.0001f, 10000f, true).M))
     
@@ -123,16 +182,6 @@ object RiftExample {
       header.RenderViewport.Pos = new OvrVector2i(0, 0)
       header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
     }
-    /*Array.tabulate(2){ eye =>
-      val texture = new Texture()
-      val header = texture.Header
-      header.TextureSize = hmd.getFovTextureSize(eye, fovPorts(eye), oversampling)
-      header.RenderViewport.Size = header.TextureSize
-      header.RenderViewport.Pos = new OvrVector2i(0, 0)
-      header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
-      texture
-    }
-    */
     
     val framebuffers = Array.tabulate(2){eye => 
       new FramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h)
@@ -155,46 +204,18 @@ object RiftExample {
       ovrDistortionCap_Chromatic | 
       ovrDistortionCap_Vignette
     
+    // configure rendering
     GlWrapper.checkGlError("before configureRendering")
     val eyeRenderDescs = hmd.configureRendering(rc, distortionCaps, fovPorts)
     GlWrapper.checkGlError("after configureRendering")
     
     
-    def linspace(min: Float, max: Float, numSteps: Int) = {
-      min to max by (max-min)/(numSteps-1)
-    }      
-    val numBlocks = 10
-    val gridOfCubes = for {
-      x <- linspace(-10, 10, numBlocks)
-      y <- linspace(-10, 10, numBlocks)
-      z <- linspace(-10, 10, numBlocks)
-      if (!(math.abs(x) < 0.5 && math.abs(y) < 0.5 && math.abs(z) < 0.5))
-    } yield {
-      val ipd = 0.0325f
-      VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_CELESTIAL_BLUE).transformSimple(Mat4f.translate(x, y, z))
-    }
-    val dist = 3
-    val cubeOfCubes = for {
-      x <- linspace(-dist, dist, numBlocks)
-      y <- linspace(-dist, dist, numBlocks)
-      z <- linspace(-dist, dist, numBlocks)
-      if ((math.abs(x) max math.abs(y) max math.abs(z)) > 0.99*dist)
-    } yield {
-      val ipd = 0.0325f * 2
-      VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transformSimple(Mat4f.translate(x, y, z))
-    }
-      
-    
+    // create: vertex data + shader + VBO
+    val vertexData = generateSceneVertexData(scene = 0)
     val shader = new DefaultLightingShader()
     
-    val vbo = 
-      //new VboCube(0, 0, 0, 1, 1, 1)
-      //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.cubeVNC(-1, +1, -1, +1, +1, -1, Color.COLOR_CELESTIAL_BLUE))
-      //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.cylinderVNC(1, 1, Color.COLOR_FERRARI_RED, 32))
-      //new GenericVBOTrianglesFixedPipeline(GenericVBOTriangles.sphereVNC(1, Color.COLOR_FERRARI_RED, 4))
-      //new StaticVboGaussianShaderVNC(VertexDataGenVNC.sphereVNC(1, Color.COLOR_FERRARI_RED, 4))
-      //new StaticVboGaussianShaderVNC(VertexDataGenVNC.roundedCubeVNC(1, 2, 3, 0.2f, Color.COLOR_FERRARI_RED, 8))
-      new StaticVbo(cubeOfCubes.reduce(_ ++ _), shader)
+    val vbo = new StaticVbo(vertexData, shader)
+    
     
     var renderMode = 'direct
     var modelR = Mat4f.createIdentity
@@ -206,61 +227,21 @@ object RiftExample {
     var tL = t1
 
 
-    
+    // nested render function
     def render(P: Mat4f, V: Mat4f) {
-      //glClearColor(0.2f, 0.2f, 0.2f, 1)
-      glClearColor(1f, 1f, 1f, 1)
+      GlWrapper.clearColor.set(Color(1f, 1f, 1f, 1f))
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    
-      //glDisable(GL_TEXTURE_2D)
       
-      //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-      //glDisable(GL_CULL_FACE)
-      
-      //glTranslatef(0, 0, -5)
-      //Color.glColorWrapper(Color.COLOR_FERRARI_RED)
-      //drawBox(-1, +1, -1, +1, -1, +1)
-      GlWrapper.checkGlError("before rendering of the cube")
+      GlWrapper.checkGlError("render -- before rendering the VBO")
       shader.use()
       shader.setProjection(P)
       shader.setModelview(V*modelT*modelR*modelS)
       vbo.render()
       
-      //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
-      /*
-      org.lwjgl.opengl.GL20.glUseProgram(0)
-      glMatrixMode(GL_PROJECTION)
-      glLoadMatrix(P.asFloatBuffer)
-
-      glMatrixMode(GL_MODELVIEW);
-      glLoadMatrix(V.asFloatBuffer)
-
-      glMultMatrix((modelT*modelR).asFloatBuffer)
-      val numblocks = 21
-      for (x <- linspace(-10, 10, numblocks)) {
-        for (y <- linspace(-10, 10, numblocks)) {
-          for (z <- linspace(-10, 10, numblocks)) {
-            if (!(math.abs(x) < 0.5 && math.abs(y) < 0.5 && math.abs(z) < 0.5)) {
-              glPushMatrix()
-              glTranslatef(x.toFloat, y.toFloat, z.toFloat)
-              //glRotatef(time.toFloat / 1000 / 1000 / 10 * x.toFloat * y.toFloat + z.toFloat, 0.0f, 1.0f, 0.0f)
-              glColor4f(100.0f/255, 50.0f/255, 20.0f/255, 1.0f)
-              //glColor4f(Random.nextFloat, Random.nextFloat, Random.nextFloat, 1.0f)
-              //new glu.Cylinder().draw(0.02f, 0.02f, 10, 4, 4)
-              val ipd = 0.0325f
-              drawBox(-ipd, +ipd, -ipd, +ipd, -ipd, +ipd)
-              //cube.draw()
-              glPopMatrix()
-            }
-          }
-        }
-      }
-      */
-      
+      GlWrapper.checkGlError("render -- finished")
     }
 
-   
+    // main loop:  
     while (!Display.isCloseRequested()) {
     
       val tN = System.currentTimeMillis()
