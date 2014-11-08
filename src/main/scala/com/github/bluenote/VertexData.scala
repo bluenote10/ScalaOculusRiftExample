@@ -1,13 +1,8 @@
 package com.github.bluenote
 
 import org.lwjgl.opengl.GL11
-import org.lwjgl.opengl.GL11._
-import org.lwjgl.opengl.GL15
 import org.lwjgl.opengl.GL20
-import org.lwjgl.opengl.GL30
-
-
-
+import org.lwjgl.opengl.GL11
 
 
 
@@ -42,9 +37,9 @@ class VertexData3D_NC(val rawData: Array[Float], val primitiveType: Int = GL11.G
         GL20.glEnableVertexAttribArray(va.locNormal)
         GL20.glEnableVertexAttribArray(va.locColor)
         GlWrapper.checkGlError("after enabling vertex attrib array")
-        GL20.glVertexAttribPointer(va.locPos3D,  3, GL_FLOAT, false, strideInBytes, 0)
-        GL20.glVertexAttribPointer(va.locNormal, 3, GL_FLOAT, false, strideInBytes, 12)
-        GL20.glVertexAttribPointer(va.locColor,  4, GL_FLOAT, false, strideInBytes, 24)
+        GL20.glVertexAttribPointer(va.locPos3D,  3, GL11.GL_FLOAT, false, strideInBytes, 0)
+        GL20.glVertexAttribPointer(va.locNormal, 3, GL11.GL_FLOAT, false, strideInBytes, 12)
+        GL20.glVertexAttribPointer(va.locColor,  4, GL11.GL_FLOAT, false, strideInBytes, 24)
         GlWrapper.checkGlError("after setting the attrib pointers")
       case _ => throw new Exception("Shader does not provide required vertex attributes")
     }
@@ -101,54 +96,6 @@ class VertexData3D_NC(val rawData: Array[Float], val primitiveType: Int = GL11.G
 
 
 
-
-/**
- * VBO wrapper for static vertex data
- */
-class StaticVbo(vertexData: VertexData, shader: Shader) {
-  
-  // initialize a VAO and bind it
-  val vao = GL30.glGenVertexArrays()
-  GL30.glBindVertexArray(vao)
-
-  // initialize the VBO and bind it
-  val vbId = GL15.glGenBuffers()
-  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
-
-  // make the attribute bindings
-  // that is where the association between the VAO and the current GL_ARRAY_BUFFER is evaluated and stored
-  vertexData.setVertexAttribArrayAndPointer(shader)
-  
-  // buffer the static vertex data
-  GL15.glBufferData(GL15.GL_ARRAY_BUFFER, ScalaBufferUtils.convertToFloatBuffer(vertexData.rawData), GL15.GL_STATIC_DRAW)
-  GlWrapper.checkGlError(getClass + " -- after buffering the data")
-  
-  // unbind everything
-  GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0)
-  GL30.glBindVertexArray(0)
-  GlWrapper.checkGlError(getClass + " -- after clean up")
-  
-  
-  def render() {
-    // bind
-    //GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbId)
-    GL30.glBindVertexArray(vao)
-    GlWrapper.checkGlError(getClass + " -- after binding VAO")
-    
-    shader.use()
-    GlWrapper.checkGlError(getClass + " -- after switching to shader")
-    //prog.switchBackToFixedPipeline
-
-    // draw
-    GL11.glDrawArrays(vertexData.primitiveType, 0, vertexData.numVertices)
-    GlWrapper.checkGlError(getClass + " -- after drawing")
-    
-    // unbind
-    GL30.glBindVertexArray(0)
-    GlWrapper.checkGlError(getClass + " -- finished rendering")
-  }
-  
-}
 
 
 
@@ -485,15 +432,6 @@ object VertexDataGen3D_NC {
   */
   
 }
-
-
-
-
-
-
-
-
-
 
 
 
