@@ -192,6 +192,9 @@ object RiftExample {
       header.RenderViewport.Pos = new OvrVector2i(0, 0)
       header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
     }
+    // the eyeTextures must be contiguous, since they are passed to endFrame
+    checkContiguous(eyeTextures)
+    
     
     val framebuffers = Array.tabulate(2){eye => 
       new FramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h)
@@ -218,6 +221,16 @@ object RiftExample {
     GlWrapper.checkGlError("before configureRendering")
     val eyeRenderDescs = hmd.configureRendering(rc, distortionCaps, fovPorts)
     GlWrapper.checkGlError("after configureRendering")
+    
+    // hmdToEyeViewOffset is an Array[OvrVector3f] and is needed in the GetEyePoses call
+    // we can prepare this here. Note: must be a contiguous structure
+    val hmdToEyeViewOffsets = new OvrVector3f().toArray(2).asInstanceOf[Array[OvrVector3f]]
+    Range(0, 2).foreach { eye =>
+      hmdToEyeViewOffsets(eye).x = eyeRenderDescs(eye).HmdToEyeViewOffset.x
+      hmdToEyeViewOffsets(eye).y = eyeRenderDescs(eye).HmdToEyeViewOffset.y
+      hmdToEyeViewOffsets(eye).z = eyeRenderDescs(eye).HmdToEyeViewOffset.z
+    }
+    checkContiguous(hmdToEyeViewOffsets)
     
     
     // create vertex data + shader + VBO
@@ -311,49 +324,24 @@ object RiftExample {
       
       // start frame timing
       val frameTiming = hmd.beginFrame(numFrames.toInt)
-      //val headPoses = for (i <- 0 until 2) yield {
       
-      val hmdToEyeViewOffsets = new OvrVector3f().toArray(2).asInstanceOf[Array[OvrVector3f]]
-      Range(0, 2).foreach { eye =>
-        hmdToEyeViewOffsets(eye).x = eyeRenderDescs(eye).HmdToEyeViewOffset.x
-        hmdToEyeViewOffsets(eye).y = eyeRenderDescs(eye).HmdToEyeViewOffset.y
-        hmdToEyeViewOffsets(eye).z = eyeRenderDescs(eye).HmdToEyeViewOffset.z
-      }
-      /*
-      val hmdToEyeViewOffsets = eyeRenderDescs.map{eyeRenderDesc =>
-        val v = new OvrVector3f
-        v.x = eyeRenderDesc.HmdToEyeViewOffset.x
-        v.y = eyeRenderDesc.HmdToEyeViewOffset.y
-        v.z = eyeRenderDesc.HmdToEyeViewOffset.z
-        v
-      }
-      */
-      //val headPoses = hmd.getEyePoses(numFrames.toInt, eyeRenderDescs.map(_.HmdToEyeViewOffset))
       val headPoses = hmd.getEyePoses(numFrames.toInt, hmdToEyeViewOffsets)
-      val headPosesCont = new Posef().toArray(2).asInstanceOf[Array[Posef]]
-      headPosesCont(0) = headPoses(0)
-      headPosesCont(1) = headPoses(1)
-      
-      
-      val eyeTexturesCont = new Texture().toArray(2).asInstanceOf[Array[Texture]]
-      /*Range(0, 2).foreach { eye =>
-        eyeTexturesCont(eye).TextureId = eyeTextures(eye).TextureId
-        eyeTexturesCont(eye).Padding = eyeTextures(eye).
-      }*/
-      eyeTexturesCont(0) = eyeTextures(0)
-      eyeTexturesCont(1) = eyeTextures(1)
-      
-      checkContiguous(hmdToEyeViewOffsets)
       checkContiguous(headPoses)
-      checkContiguous(eyeTextures)
-      checkContiguous(headPosesCont)
-      checkContiguous(eyeTexturesCont)
-      
-      for (i <- 0 until 2) yield {
+      //val headPosesCont = new Posef().toArray(2).asInstanceOf[Array[Posef]]
+      //headPosesCont(0) = headPoses(0)
+      //headPosesCont(1) = headPoses(1)
+
+      val nextFrameDelta = (frameTiming.NextFrameSeconds-frameTiming.ThisFrameSeconds)*1000
+      val scanoutMidpointDelta = (frameTiming.ScanoutMidpointSeconds-frameTiming.ThisFrameSeconds)*1000
+      val timewarpDelta = (frameTiming.TimewarpPointSeconds-frameTiming.ThisFrameSeconds)*1000
+      println(f"delta = ${frameTiming.DeltaSeconds*1000}%9.3f thisFrame = ${frameTiming.ThisFrameSeconds*1000}%9.3f    nextFrameΔ = ${nextFrameDelta}%9.3f    timewarpΔ =  ${timewarpDelta}%9.3f    scanoutMidpointΔ = ${scanoutMidpointDelta}%9.3f")
+
+      // now iterate eyes
+      for (i <- 0 until 2) {
         val eye = hmd.EyeRenderOrder(i)
         val P = projections(eye)
 
-        val pose = headPosesCont(eye) // this was hmd.getEyePose(eye) in the old SDK
+        val pose = headPoses(eye)
         
         //println(f"tracking position: x = ${pose.Position.x}%8.3f    y = ${pose.Position.y}%8.3f    z = ${pose.Position.z}%8.3f")
 
@@ -370,19 +358,16 @@ object RiftExample {
         render(P, V)
         framebuffers(eye).deactivate()
 
-        //hmd.endEyeRender(eye, pose, eyeTextures(eye))
         GlWrapper.checkGlError("after hmd.endEyeRender()")
-        
-        //pose
       }
       
       GlWrapper.checkGlError("before hmd.endFrame()")
-      hmd.endFrame(headPoses, eyeTexturesCont)
-      GlWrapper.checkGlError("after hmd.endFrame()", true) // this seems to fail
+      hmd.endFrame(headPoses, eyeTextures)
+      GlWrapper.checkGlError("after hmd.endFrame()")
 
       Display.update()
       //Display.swapBuffers()
-      //Display.sync(120)
+      //Display.sync(75)
       numFrames += 1
     }
 
