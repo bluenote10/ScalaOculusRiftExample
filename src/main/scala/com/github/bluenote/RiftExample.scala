@@ -22,11 +22,34 @@ import com.oculusvr.capi.RenderAPIConfig
 import com.oculusvr.capi.Texture
 import com.sun.jna.Structure
 
-//import VertexDataGenVNC._
 
 
 object RiftExample {
 
+  /**
+   * Initializes libOVR and returns the Hmd instance
+   */
+  def initHmd(): Hmd = {
+
+    // OvrLibrary.INSTANCE.ovr_Initialize() // is this actually still needed?
+    Hmd.initialize()
+    Thread.sleep(400) 
+    
+    val hmd = 
+      //Hmd.createDebug(ovrHmd_DK1)
+      Hmd.create(0)
+    if (hmd == null) {
+      println("Oculus Rift HMD not found.")
+      System.exit(-1)
+    }
+    
+    // set hmd caps
+    hmd.setEnabledCaps(OvrLibrary.ovrHmdCaps.ovrHmdCap_LowPersistence | OvrLibrary.ovrHmdCaps.ovrHmdCap_NoVSync)
+    
+    hmd
+  }
+  
+  
   /** Helper function used by initOpenGL */
   def setupContext(): ContextAttribs = {
     new ContextAttribs(3, 3)
@@ -104,21 +127,22 @@ object RiftExample {
    * Generates the vertex data of the scene (multiple variants)
    */
   def generateSceneVertexData(scene: Int = 0): VertexData = {
+    val approxHalfIpd = 0.064f / 2
     def linspace(min: Float, max: Float, numSteps: Int) = {
       min to max by (max-min)/(numSteps-1)
     }      
     scene match {
       case 0 => {
         val numBlocks = 10
-        val dist = 3
+        val dist = 1.5f
         val cubeOfCubes = for {
           x <- linspace(-dist, dist, numBlocks)
           y <- linspace(-dist, dist, numBlocks)
           z <- linspace(-dist, dist, numBlocks)
           if ((math.abs(x) max math.abs(y) max math.abs(z)) > 0.99*dist)
         } yield {
-          val ipd = 0.0325f * 2
-          VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_FERRARI_RED).transformSimple(Mat4f.translate(x, y, z))
+          val h = approxHalfIpd
+          VertexDataGen3D_NC.cube(-h, +h, -h, +h, +h, -h, Color.COLOR_FERRARI_RED).transformSimple(Mat4f.translate(x, y, z))
         }
         cubeOfCubes.reduce(_ ++ _)
       }
@@ -130,8 +154,8 @@ object RiftExample {
           z <- linspace(-10, 10, numBlocks)
           if (!(math.abs(x) < 0.5 && math.abs(y) < 0.5 && math.abs(z) < 0.5))
         } yield {
-          val ipd = 0.0325f
-          VertexDataGen3D_NC.cube(-ipd, +ipd, -ipd, +ipd, +ipd, -ipd, Color.COLOR_CELESTIAL_BLUE).transformSimple(Mat4f.translate(x, y, z))
+          val h = approxHalfIpd
+          VertexDataGen3D_NC.cube(-h, +h, -h, +h, +h, -h, Color.COLOR_CELESTIAL_BLUE).transformSimple(Mat4f.translate(x, y, z))
         }
         gridOfCubes.reduce(_ ++ _)
       }
@@ -144,23 +168,9 @@ object RiftExample {
    */
   def main(args: Array[String]) {
     
-    // load Oculus Rift
-    //OvrLibrary.INSTANCE.ovr_Initialize()
-    OvrLibrary.INSTANCE.ovr_Initialize()
-    Hmd.initialize()
-    Thread.sleep(400)
+    // initialize the Oculus Rift
+    val hmd = initHmd() 
     
-    val hmd = 
-      //Hmd.createDebug(ovrHmd_DK1)
-      Hmd.create(0)
-    if (hmd == null) {
-      println("Oculus Rift HMD not found.")
-      System.exit(-1)
-    }
-    
-    // set hmd caps
-    hmd.setEnabledCaps(OvrLibrary.ovrHmdCaps.ovrHmdCap_LowPersistence | OvrLibrary.ovrHmdCaps.ovrHmdCap_NoVSync)
-
     // initialize and configure OpenGL
     initOpenGL(hmd)
     configureOpenGL()
@@ -210,44 +220,21 @@ object RiftExample {
     GlWrapper.checkGlError("after configureRendering")
     
     
-    // create: vertex data + shader + VBO
+    // create vertex data + shader + VBO
     val vertexData = generateSceneVertexData(scene = 0)
     val shader = new DefaultLightingShader()
     
     val vbo = new StaticVbo(vertexData, shader)
     
     
-    var renderMode = 'direct
+    // mutable model/world transformation
     var modelR = Mat4f.createIdentity
     var modelS = Mat4f.createIdentity
-    var modelT = Mat4f.translate(0, 0, -5)
+    var modelT = Mat4f.translate(0, 0, -2)
     
-    var numFrames = 0L
-    val t1 = System.currentTimeMillis()
-    var tL = t1
 
-
-    // nested render function
-    def render(P: Mat4f, V: Mat4f) {
-      GlWrapper.clearColor.set(Color(1f, 1f, 1f, 1f))
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-      
-      GlWrapper.checkGlError("render -- before rendering the VBO")
-      shader.use()
-      shader.setProjection(P)
-      shader.setModelview(V*modelT*modelR*modelS)
-      vbo.render()
-      
-      GlWrapper.checkGlError("render -- finished")
-    }
-
-    // main loop:  
-    while (!Display.isCloseRequested()) {
-    
-      val tN = System.currentTimeMillis()
-      val dt = tN-tL
-      tL = tN
-
+    // nested function for handling a few keyboard controls
+    def handleKeyboardInput(dt: Float) {
       val ds = 0.001f * dt   //   1 m/s
       val da = 0.09f  * dt   //  90 °/s
       val dS = 0.001f * dt   //   1 m/s
@@ -257,8 +244,7 @@ object RiftExample {
         val (isKeyPress, key, char) = (Keyboard.getEventKeyState(), Keyboard.getEventKey(), Keyboard.getEventCharacter())
         if (isKeyPress) {
           key match {
-            case KEY_F1 => renderMode = 'direct
-            case KEY_F2 => renderMode = 'framebuffer
+            case KEY_F1 => // currently nothing
             case _ => {}
           }
         }
@@ -283,18 +269,47 @@ object RiftExample {
       if (Keyboard.isKeyDown(KEY_K))      modelS = modelS.scale(1f-dS, 1, 1)
       if (Keyboard.isKeyDown(KEY_Z))      modelS = modelS.scale(1, 1f+dS, 1)
       if (Keyboard.isKeyDown(KEY_I))      modelS = modelS.scale(1, 1f-dS, 1)
+    }
+    
+    // nested render function
+    def render(P: Mat4f, V: Mat4f) {
+      GlWrapper.clearColor.set(Color(1f, 1f, 1f, 1f))
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+      
+      GlWrapper.checkGlError("render -- before rendering the VBO")
+      shader.use()
+      shader.setProjection(P)
+      shader.setModelview(V*modelT*modelR*modelS)
+      vbo.render()
+      
+      GlWrapper.checkGlError("render -- finished")
+    }
 
-      // get orientation quaternion
-      /*
-      oculusRift.poll();
-      val yaw   = oculusRift.getYawDegrees_LH()
-      val pitch = oculusRift.getPitchDegrees_LH()
-      val roll  = oculusRift.getRollDegrees_LH()
-      val V = Mat4f.rotateYawPitchRollQuaternions(yaw, pitch, roll)
-      */
+
+    // frame timing vars
+    var numFrames = 0L
+    val t1 = System.currentTimeMillis()
+    var tL = t1
+    
+    
+    // main loop:  
+    while (!Display.isCloseRequested()) {
+    
+      val tN = System.currentTimeMillis()
+      val dt = tN-tL
+      tL = tN
       
-      GlWrapper.checkGlError()
+      handleKeyboardInput(dt)
+
+      GlWrapper.checkGlError("beginning of main loop")
       
+      // deal with HSW
+      val hswState = hmd.getHSWDisplayState()
+      if (hswState.Displayed != 0) {
+        hmd.dismissHSWDisplay()
+      }
+      
+      // start frame timing
       val frameTiming = hmd.beginFrame(numFrames.toInt)
       //val headPoses = for (i <- 0 until 2) yield {
       
@@ -338,15 +353,18 @@ object RiftExample {
         val eye = hmd.EyeRenderOrder(i)
         val P = projections(eye)
 
-        val pose = //hmd.getEyePose(eye)
-          headPosesCont(eye)
+        val pose = headPosesCont(eye) // this was hmd.getEyePose(eye) in the old SDK
         
-        val matPos = Mat4f.translate(-pose.Position.x, -pose.Position.y, -pose.Position.z)
+        //println(f"tracking position: x = ${pose.Position.x}%8.3f    y = ${pose.Position.y}%8.3f    z = ${pose.Position.z}%8.3f")
+
+        //val trackingScale = 0.1f
+        val matPos = Mat4f.translate(-pose.Position.x, -pose.Position.y, -pose.Position.z) //.scale(trackingScale, trackingScale, trackingScale)
         val matOri = new Quaternion(-pose.Orientation.x, -pose.Orientation.y, -pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // RH
-        val matEye = Mat4f.translate(eyeRenderDescs(eye).HmdToEyeViewOffset.x, eyeRenderDescs(eye).HmdToEyeViewOffset.y, eyeRenderDescs(eye).HmdToEyeViewOffset.z)
-        val V = matEye * matOri * matPos
-        //val V = matOri
-        //val V = matEye
+        val V = matOri * matPos 
+        
+        // the old transformation was: matEye * matOri * matPos
+        // the matEye correction is no longer needed, since the eye offset is now incorporated into pose.position
+        // val matEye = Mat4f.translate(eyeRenderDescs(eye).HmdToEyeViewOffset.x, eyeRenderDescs(eye).HmdToEyeViewOffset.y, eyeRenderDescs(eye).HmdToEyeViewOffset.z)
         
         framebuffers(eye).activate()
         render(P, V)
@@ -371,13 +389,14 @@ object RiftExample {
     val t2 = System.currentTimeMillis()
     println(f"\n *** average framerate: ${numFrames.toDouble / (t2-t1) * 1000}%.1f fps")
 
-    //hmd.stopSensor()
-    println("sensor stopped")
+    // destroy Hmd
     hmd.destroy()
-    //OvrLibrary.INSTANCE.ovr_Shutdown()
-    println("hmd destroyed")
+    // OvrLibrary.INSTANCE.ovr_Shutdown() // apparently no longer required, causes buffer overflow
+    println("Hmd destroyed")
+    
+    // destroy display
     Display.destroy()
-    println("display destroyed")
+    println("Display destroyed")
     
     System.exit(0)
   }
