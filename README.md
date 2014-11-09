@@ -16,4 +16,4 @@ Keyboard Shortcuts: To keep things simple, there is currently only very basic ke
 
 #### Getting Started for Non-Scala Users
 
-If you want to try out the example but you do not have to have/know Scala: No problem. All you need is a JVM and [SBT](http://www.scala-sbt.org/) (Simple Build Tool, the equivalent to Maven in the Scala world). You can simply download the SBT launcher (basically a JAR and a start script `sbt` which launches the JAR), run `sbt` in the project folder, and type `run` within the SBT shell. This will download and compile Scala, download the JOVR library, compile the project, and run it.
+If you want to try out the example but do not have/know Scala: No problem. All you need is a JVM and [SBT](http://www.scala-sbt.org/) (Simple Build Tool, the equivalent to Maven in the Scala world). You can simply download the SBT launcher (basically a JAR and a start script `sbt` which launches the JAR), run `sbt` in the project folder, and type `run` within the SBT shell. This will download and compile Scala, download the JOVR library, compile the project, and run it.
