@@ -15,6 +15,7 @@ import com.oculusvr.capi.Hmd
 import com.oculusvr.capi.OvrLibrary
 import com.oculusvr.capi.OvrLibrary.ovrDistortionCaps._
 import com.oculusvr.capi.OvrLibrary.ovrTrackingCaps._
+import com.oculusvr.capi.OvrLibrary.ovrHmdCaps._
 import com.oculusvr.capi.OvrVector2i
 import com.oculusvr.capi.OvrVector3f
 import com.oculusvr.capi.Posef
@@ -44,7 +45,10 @@ object RiftExample {
     }
     
     // set hmd caps
-    hmd.setEnabledCaps(OvrLibrary.ovrHmdCaps.ovrHmdCap_LowPersistence | OvrLibrary.ovrHmdCaps.ovrHmdCap_NoVSync)
+    val hmdCaps = ovrHmdCap_LowPersistence | 
+                  ovrHmdCap_NoVSync | 
+                  ovrHmdCap_DynamicPrediction 
+    hmd.setEnabledCaps(hmdCaps)
     
     hmd
   }
@@ -213,7 +217,10 @@ object RiftExample {
     
     val distortionCaps = 
       //ovrDistortionCap_NoSwapBuffers |
+      //ovrDistortionCap_FlipInput |
       //ovrDistortionCap_TimeWarp |
+      ovrDistortionCap_Overdrive |
+      ovrDistortionCap_HqDistortion |
       ovrDistortionCap_Chromatic | 
       ovrDistortionCap_Vignette
     
@@ -323,25 +330,50 @@ object RiftExample {
       }
       
       // start frame timing
-      val frameTiming = hmd.beginFrame(numFrames.toInt)
+      val frameTiming = hmd.beginFrame(0 /*numFrames.toInt*/)
       
-      val headPoses = hmd.getEyePoses(numFrames.toInt, hmdToEyeViewOffsets)
+      // get tracking by getEyePoses
+      val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
       checkContiguous(headPoses)
-      //val headPosesCont = new Posef().toArray(2).asInstanceOf[Array[Posef]]
-      //headPosesCont(0) = headPoses(0)
-      //headPosesCont(1) = headPoses(1)
 
+      // get tracking manually
+      val predictionTimePoint = frameTiming.ThisFrameSeconds + 0.002 // frameTiming.ScanoutMidpointSeconds
+      val trackingState = hmd.getSensorState(predictionTimePoint)
+      val manualHeadPoses = {
+        val pose = trackingState.HeadPose.Pose
+        val matPos = Mat4f.translate(pose.Position.x, pose.Position.y, pose.Position.z)
+        val matOri = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // LH
+        val headPoses = new Posef().toArray(2).asInstanceOf[Array[Posef]]
+        for (eye <- 0 until 2) {
+          val matEye = Mat4f.translate(-eyeRenderDescs(eye).HmdToEyeViewOffset.x, -eyeRenderDescs(eye).HmdToEyeViewOffset.y, -eyeRenderDescs(eye).HmdToEyeViewOffset.z)
+          val V = matPos * matOri * matEye // reverse transformation
+          val origin = V * Vec4f(0,0,0,1)
+          headPoses(eye).Position.x = origin.x
+          headPoses(eye).Position.y = origin.y
+          headPoses(eye).Position.z = origin.z
+          headPoses(eye).Orientation.x = pose.Orientation.x
+          headPoses(eye).Orientation.y = pose.Orientation.y
+          headPoses(eye).Orientation.z = pose.Orientation.z
+          headPoses(eye).Orientation.w = pose.Orientation.w
+          //println(f"$eye    orig x = ${pose.Position.x}   new x = ${headPoses(eye).Position.x}    orig y = ${pose.Position.y}   new y = ${headPoses(eye).Position.y}    orig z = ${pose.Position.z}   new z = ${headPoses(eye).Position.z}")
+        }
+        headPoses
+      }
+      checkContiguous(manualHeadPoses)
+      
+      val headPosesToUse = headPoses
+      
       val nextFrameDelta = (frameTiming.NextFrameSeconds-frameTiming.ThisFrameSeconds)*1000
       val scanoutMidpointDelta = (frameTiming.ScanoutMidpointSeconds-frameTiming.ThisFrameSeconds)*1000
       val timewarpDelta = (frameTiming.TimewarpPointSeconds-frameTiming.ThisFrameSeconds)*1000
-      println(f"delta = ${frameTiming.DeltaSeconds*1000}%9.3f thisFrame = ${frameTiming.ThisFrameSeconds*1000}%9.3f    nextFrameΔ = ${nextFrameDelta}%9.3f    timewarpΔ =  ${timewarpDelta}%9.3f    scanoutMidpointΔ = ${scanoutMidpointDelta}%9.3f")
+      //println(f"delta = ${frameTiming.DeltaSeconds*1000}%9.3f thisFrame = ${frameTiming.ThisFrameSeconds*1000}%9.3f    nextFrameΔ = ${nextFrameDelta}%9.3f    timewarpΔ =  ${timewarpDelta}%9.3f    scanoutMidpointΔ = ${scanoutMidpointDelta}%9.3f")
 
       // now iterate eyes
       for (i <- 0 until 2) {
         val eye = hmd.EyeRenderOrder(i)
         val P = projections(eye)
 
-        val pose = headPoses(eye)
+        val pose = headPosesToUse(eye)
         
         //println(f"tracking position: x = ${pose.Position.x}%8.3f    y = ${pose.Position.y}%8.3f    z = ${pose.Position.z}%8.3f")
 
@@ -362,7 +394,7 @@ object RiftExample {
       }
       
       GlWrapper.checkGlError("before hmd.endFrame()")
-      hmd.endFrame(headPoses, eyeTextures)
+      hmd.endFrame(headPosesToUse, eyeTextures)
       GlWrapper.checkGlError("after hmd.endFrame()")
 
       Display.update()
