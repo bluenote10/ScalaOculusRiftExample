@@ -105,6 +105,32 @@ class Quaternion(var x: Float, var y: Float, var z: Float, var w: Float) {
                   0,             0,             0,   1       
     )
   }
+  
+  // inspired by: http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/
+  def toEuler(): EulerAngles = {
+    val test = x*y + z*w
+    if (test > 0.499) { // singularity at north pole
+      val yaw   = 2 * math.atan2(x, w)
+      val roll  = Math.PI/2
+      val pitch = 0f
+      return EulerAngles(yaw.toFloat*180/Math.PI.toFloat, pitch.toFloat*180/Math.PI.toFloat, roll.toFloat*180/Math.PI.toFloat)
+    }
+    if (test < -0.499) { // singularity at south pole
+      val yaw   = -2 * Math.atan2(x, w)
+      val roll  = -Math.PI/2
+      val pitch = 0
+      return EulerAngles(yaw.toFloat*180/Math.PI.toFloat, pitch.toFloat*180/Math.PI.toFloat, roll.toFloat*180/Math.PI.toFloat)
+    }
+    val sqx = x * x
+    val sqy = y * y
+    val sqz = z * z
+    val yaw   = Math.atan2(2*y*w-2*x*z, 1 - 2*sqy - 2*sqz)
+    val roll  = Math.asin(2*test)
+    val pitch = Math.atan2(2*x*w-2*y*z, 1 - 2*sqx - 2*sqz)
+    return EulerAngles(yaw.toFloat*180/Math.PI.toFloat, pitch.toFloat*180/Math.PI.toFloat, roll.toFloat*180/Math.PI.toFloat)
+  } 
+  
+  
 }
 
 object Quaternion {
@@ -158,6 +184,8 @@ object Quaternion {
     }    
   }
 }
+
+case class EulerAngles(yaw: Float, pitch: Float, roll: Float)
 
 
 

@@ -34,7 +34,6 @@ object RiftExample {
 
     // OvrLibrary.INSTANCE.ovr_Initialize() // is this actually still needed?
     Hmd.initialize()
-    Thread.sleep(400) 
     
     val hmd = 
       //Hmd.createDebug(ovrHmd_DK1)
@@ -311,6 +310,7 @@ object RiftExample {
     val t1 = System.currentTimeMillis()
     var tL = t1
     
+    val trackingLogger = new RiftTrackingLogger
     
     // main loop:  
     while (!Display.isCloseRequested()) {
@@ -332,17 +332,21 @@ object RiftExample {
       // start frame timing
       val frameTiming = hmd.beginFrame(0 /*numFrames.toInt*/)
       
+      trackingLogger.writeTrackingState(hmd, frameTiming)
+      
       // get tracking by getEyePoses
       val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
       checkContiguous(headPoses)
 
       // get tracking manually
-      val predictionTimePoint = frameTiming.ThisFrameSeconds + 0.002 // frameTiming.ScanoutMidpointSeconds
+      val predictionTimePoint = frameTiming.ThisFrameSeconds + 0.05 // + 0.002 // frameTiming.ScanoutMidpointSeconds
       val trackingState = hmd.getSensorState(predictionTimePoint)
       val manualHeadPoses = {
         val pose = trackingState.HeadPose.Pose
         val matPos = Mat4f.translate(pose.Position.x, pose.Position.y, pose.Position.z)
         val matOri = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // LH
+        val euler = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).toEuler()
+        println(f"yaw = ${euler.yaw}%12.6f    pitch = ${euler.pitch}%12.6f    roll = ${euler.roll}%12.6f")
         val headPoses = new Posef().toArray(2).asInstanceOf[Array[Posef]]
         for (eye <- 0 until 2) {
           val matEye = Mat4f.translate(-eyeRenderDescs(eye).HmdToEyeViewOffset.x, -eyeRenderDescs(eye).HmdToEyeViewOffset.y, -eyeRenderDescs(eye).HmdToEyeViewOffset.z)
@@ -361,7 +365,7 @@ object RiftExample {
       }
       checkContiguous(manualHeadPoses)
       
-      val headPosesToUse = headPoses
+      val headPosesToUse = manualHeadPoses
       
       val nextFrameDelta = (frameTiming.NextFrameSeconds-frameTiming.ThisFrameSeconds)*1000
       val scanoutMidpointDelta = (frameTiming.ScanoutMidpointSeconds-frameTiming.ThisFrameSeconds)*1000
@@ -406,6 +410,8 @@ object RiftExample {
     val t2 = System.currentTimeMillis()
     println(f"\n *** average framerate: ${numFrames.toDouble / (t2-t1) * 1000}%.1f fps")
 
+    trackingLogger.close()
+    
     // destroy Hmd
     hmd.destroy()
     // OvrLibrary.INSTANCE.ovr_Shutdown() // apparently no longer required, causes buffer overflow
