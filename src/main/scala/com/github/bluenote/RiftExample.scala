@@ -310,7 +310,7 @@ object RiftExample {
     val t1 = System.currentTimeMillis()
     var tL = t1
     
-    val trackingLogger: Option[RiftTrackingLogger] = None // new RiftTrackingLogger
+    val trackingLogger: Option[RiftTrackingLogger] = None // Some(new RiftTrackingLogger)
     
     // main loop:  
     while (!Display.isCloseRequested()) {
