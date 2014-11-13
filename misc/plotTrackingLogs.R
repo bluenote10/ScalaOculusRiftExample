@@ -1,53 +1,65 @@
 
 data <- read.csv("trackingLog.csv", sep=";", header=T)
 
-names(data) <- c("time", "- 1000ms", "+ 0ms", "+ 20ms", "+ 100ms", "ScanoutMidpoint")
+names(data) <- c("time", "tft - 1000ms", "tft", "tft + 10ms", "tft + 50ms", "ScanoutMidpoint")
 
+# subtract initial time
 data$time <- data$time - data$time[1]
 
-plot(data$time, data$thisFrame, type='l')
-
-
-plotRange <- function(data, from = NULL, to = NULL) {
-  library("ggplot2")
-  if (!is.null(from) && !is.null(to)) {
-    data <- subset(data, time > from & time < to)
-  }
-  p <- ggplot(data, aes(x=time))
-  
-  #otherFeatures <- names(data)[-1]
-  p <- p + geom_line(aes(y=past, colour="- 1000 ms"))
-  p <- p + geom_line(aes(y=thisFrame, colour="+ 0 ms"))
-  p <- p + geom_line(aes(y=thisFrame...20.ms, colour="+ 20 ms"))
-  p <- p + geom_line(aes(y=thisFrame...100.ms, colour="+ 100 ms"))
-  p <- p + geom_line(aes(y=ScanoutMidpoint, colour="ScanoutMidpoint"))
-  p <- p + theme_light() #+ guide_legend(reverse = TRUE)
-  plot(p)
+# some plotting theme settings
+theme_customized <- function() {
+  theme(axis.title=element_text(family="Ubuntu", face="bold", color="#CC6600", size=16),
+        axis.text=element_text(family="Monospace", face="plain", color="blue", size=14),
+        legend.title=element_text(family="Ubuntu", face="bold", color="black", size=16),
+        legend.text=element_text(family="Ubuntu", face="plain", color="#111111", size=14))  
 }
 
-plotRange <- function(data, from = NULL, to = NULL) {
+
+# create the prediction + delta plot
+plotRange <- function(data, from = NULL, to = NULL, filename = NULL) {
   library("ggplot2")
   if (!is.null(from) && !is.null(to)) {
     data <- subset(data, time > from & time < to)
   }
-  otherFeatures <- names(data)[-1]
+  data$time <- data$time * 1000
+  data$time <- data$time - data$time[1]
   
   library(reshape2)
   newdata <- melt(data, id = "time")
-  p <- ggplot(newdata, aes(x = time, y = value, color = variable)) + geom_line()
-  p <- p + theme_light() #+ guide_legend(reverse = TRUE)
-  plot(p)
+  p1 <- ggplot(newdata, aes(x = time, y = value, color = variable)) +
+    geom_line() +
+    geom_point(shape=19) +
+    xlab("time [ms]") +
+    ylab("yaw [°]") +
+    labs(colour="Predictions") +
+    theme_light() + 
+    theme_customized()
+    
+  plot(p1)
+  if (!is.null(filename)) {
+    ggsave(paste(filename, "_yaw.png", sep=''), p1, type='cairo-png', dpi=72)
+  }
+  
+  dt <- data$time[-1] - data$time[-length(data$time)]
+  df <- data.frame(time=data$time[-length(data$time)], dt=dt)
+  p2 <- ggplot(df, aes(x = time, y = dt)) +
+    geom_line() +
+    geom_point(shape=19) +
+    xlab("time [ms]") +
+    ylab("delta [ms]") +
+    theme_light() + 
+    theme_customized()
+  
+  plot(p2)
+  if (!is.null(filename)) {
+    ggsave(paste(filename, "_dt.png", sep=''), p2, type='cairo-png', dpi=72)
+  }
+  
+  print(mean(dt))
 }
 
 
-from <- 1.05
-to <- 1.2
-zoom <- subset(data, time > from & time < to)
-
-plot(zoom$time, zoom$thisFrame, type='l')
-
-plotRange(data, 0, 3.5)
-
+plotRange(data)
 
 
 

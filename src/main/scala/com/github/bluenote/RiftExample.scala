@@ -310,7 +310,7 @@ object RiftExample {
     val t1 = System.currentTimeMillis()
     var tL = t1
     
-    val trackingLogger = new RiftTrackingLogger
+    val trackingLogger: Option[RiftTrackingLogger] = None // new RiftTrackingLogger
     
     // main loop:  
     while (!Display.isCloseRequested()) {
@@ -332,14 +332,14 @@ object RiftExample {
       // start frame timing
       val frameTiming = hmd.beginFrame(0 /*numFrames.toInt*/)
       
-      trackingLogger.writeTrackingState(hmd, frameTiming)
+      trackingLogger.map(_.writeTrackingState(hmd, frameTiming))
       
       // get tracking by getEyePoses
       val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
       checkContiguous(headPoses)
 
       // get tracking manually
-      val predictionTimePoint = frameTiming.ThisFrameSeconds + 0.05 // + 0.002 // frameTiming.ScanoutMidpointSeconds
+      val predictionTimePoint = frameTiming.ScanoutMidpointSeconds // + 0.002 // frameTiming.ScanoutMidpointSeconds
       val trackingState = hmd.getSensorState(predictionTimePoint)
       val manualHeadPoses = {
         val pose = trackingState.HeadPose.Pose
@@ -410,7 +410,7 @@ object RiftExample {
     val t2 = System.currentTimeMillis()
     println(f"\n *** average framerate: ${numFrames.toDouble / (t2-t1) * 1000}%.1f fps")
 
-    trackingLogger.close()
+    trackingLogger.map(_.close())
     
     // destroy Hmd
     hmd.destroy()

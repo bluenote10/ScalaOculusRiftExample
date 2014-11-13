@@ -16,8 +16,8 @@ class RiftTrackingLogger() {
   val predictionPoints = ListMap[String, FrameTiming => Double](
     "past"                -> (frameTiming => frameTiming.ThisFrameSeconds - 1.0),
     "thisFrame"           -> (frameTiming => frameTiming.ThisFrameSeconds),
-    "thisFrame + 20 ms"   -> (frameTiming => frameTiming.ThisFrameSeconds + 0.02),
-    "thisFrame + 100 ms"  -> (frameTiming => frameTiming.ThisFrameSeconds + 0.1),
+    "thisFrame + 10 ms"   -> (frameTiming => frameTiming.ThisFrameSeconds + 0.01),
+    "thisFrame + 50 ms"   -> (frameTiming => frameTiming.ThisFrameSeconds + 0.05),
     "ScanoutMidpoint"     -> (frameTiming => frameTiming.ScanoutMidpointSeconds)
   )
 
@@ -30,8 +30,6 @@ class RiftTrackingLogger() {
     val orientations = for (predictionTimePoint <- predictionPoints.values) yield {
       val trackingState = hmd.getSensorState(predictionTimePoint(frameTiming))
       val pose = trackingState.HeadPose.Pose
-      
-      //val matOri = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // LH
       val orientation = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).toEuler
       orientation
     }
