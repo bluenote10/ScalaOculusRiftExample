@@ -20,7 +20,7 @@ libraryDependencies += "org.saintandreas" % "jovr" % "0.4.3.0"
 
 fork in run := true
 
-javaOptions in run += "-Djava.library.path=" + Seq({ if (System.getProperty("os.name").startsWith("Windows")) "lib\\native\\windows" else "lib/native/linux" } ).mkString(java.io.File.pathSeparator)
+javaOptions in run += "-Djava.library.path=" + Seq({ if (System.getProperty("os.name").startsWith("Windows")) "lib\\native\\windows" else "lib/native/linux/x64" } ).mkString(java.io.File.pathSeparator)
 
 javaOptions in run += "-Dorg.lwjgl.opengl.Window.undecorated=true"
 
