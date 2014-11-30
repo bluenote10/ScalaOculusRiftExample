@@ -1,15 +1,11 @@
 package com.github.bluenote
 
-import org.lwjgl.input.Keyboard
-import org.lwjgl.input.Keyboard._
-import org.lwjgl.input.Mouse
-import org.lwjgl.opengl.ContextAttribs
-import org.lwjgl.opengl.Display
-import org.lwjgl.opengl.DisplayMode
+import org.lwjgl.system.glfw._
+import org.lwjgl.system.glfw.GLFW._
+import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11._
 import org.lwjgl.opengl.GLContext
-import org.lwjgl.opengl.PixelFormat
 
 import com.oculusvr.capi.Hmd
 import com.oculusvr.capi.OvrLibrary
@@ -55,6 +51,7 @@ object RiftExample {
   
   
   /** Helper function used by initOpenGL */
+  /*
   def setupContext(): ContextAttribs = {
     new ContextAttribs(3, 3)
     .withForwardCompatible(true)
@@ -70,14 +67,36 @@ object RiftExample {
     println(f"Creating window $width x $height @ x = $left, y = $top")
     //Display.setVSyncEnabled(true)
   }
- 
+  */
+  
   /**
    * Initializes OpenGL
    * I first ran into some issues with an "invalid memory access" in configureRendering 
    * depending on how I initialize OpenGL (probably a context issue, but this was with the old SDK). 
    * To solve the issue I now initialize OpenGL similar to LwjglApp.run. 
    */  
-  def initOpenGL(hmd: Hmd) {
+  def initOpenGL(hmd: Hmd): Long = {
+    
+    glfwSetErrorCallback(ErrorCallback.Util.getDefault())
+    
+    if (glfwInit() != GL11.GL_TRUE) {
+      throw new IllegalStateException("Unable to initialize GLFW")
+    }
+    
+    glfwDefaultWindowHints()
+    //glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+    //glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
+    
+    val window = glfwCreateWindow(hmd.Resolution.w, hmd.Resolution.h, "Rift Example", NULL, NULL)
+    if (window == NULL) {
+      throw new RuntimeException("Failed to create the GLFW window")
+    } 
+    
+    glfwMakeContextCurrent(window)
+    glfwSwapInterval(1)
+
+    glfwShowWindow(window)
+    /*
     // new initialization:
     if (true) {
       val glContext = new GLContext()
@@ -102,13 +121,15 @@ object RiftExample {
       Display.create(new PixelFormat(/*Alpha Bits*/8, /*Depth bits*/ 8, /*Stencil bits*/ 0, /*samples*/8))     
     }
     println(f"OpenGL version: ${GL11.glGetString(GL11.GL_VERSION)}")
+  */
+    window
   }
- 
   
   /**
    * Some general OpenGL state settings
    */
   def configureOpenGL() {
+    GLContext.createFromCurrent()
     glClearColor(78/255f, 115/255f, 151/255f, 0.0f)
 
     glClearDepth(1.0f)
@@ -176,7 +197,7 @@ object RiftExample {
     val hmd = initHmd() 
     
     // initialize and configure OpenGL
-    initOpenGL(hmd)
+    val window = initOpenGL(hmd)
     configureOpenGL()
     
     // start tracking
@@ -258,7 +279,7 @@ object RiftExample {
       val ds = 0.001f * dt   //   1 m/s
       val da = 0.09f  * dt   //  90 °/s
       val dS = 0.001f * dt   //   1 m/s
-      
+      /*
       import Keyboard._
       while (Keyboard.next()) {
         val (isKeyPress, key, char) = (Keyboard.getEventKeyState(), Keyboard.getEventKey(), Keyboard.getEventCharacter())
@@ -289,6 +310,7 @@ object RiftExample {
       if (Keyboard.isKeyDown(KEY_K))      modelS = modelS.scale(1f-dS, 1, 1)
       if (Keyboard.isKeyDown(KEY_Z))      modelS = modelS.scale(1, 1f+dS, 1)
       if (Keyboard.isKeyDown(KEY_I))      modelS = modelS.scale(1, 1f-dS, 1)
+      */
     }
     
     // nested render function
@@ -314,8 +336,8 @@ object RiftExample {
     val trackingLogger: Option[RiftTrackingLogger] = None // Some(new RiftTrackingLogger)
     
     // main loop:  
-    while (!Display.isCloseRequested() && numFrames < 500) {
-      
+    while (glfwWindowShouldClose(window) == GL_FALSE) {
+    
       val tN = System.currentTimeMillis()
       val dt = tN-tL
       tL = tN
@@ -404,9 +426,8 @@ object RiftExample {
       hmd.endFrame(headPosesToUse, eyeTextures)
       GlWrapper.checkGlError("after hmd.endFrame()")
 
-      //Display.update()
-      //Display.swapBuffers()
-      //Display.sync(75)
+      glfwSwapBuffers(window);
+      glfwPollEvents();
       numFrames += 1
       
     }
@@ -422,7 +443,8 @@ object RiftExample {
     println("Hmd destroyed")
     
     // destroy display
-    Display.destroy()
+    glfwDestroyWindow(window)
+    glfwTerminate()
     println("Display destroyed")
     
     System.exit(0)
