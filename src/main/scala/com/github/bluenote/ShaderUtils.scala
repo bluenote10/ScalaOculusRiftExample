@@ -2,6 +2,7 @@ package com.github.bluenote
 
 
 import org.lwjgl.opengl.GL20
+import org.lwjgl.BufferUtils
 
 
 object ShaderUtils {
@@ -110,13 +111,17 @@ class ShaderProgram(vsFile: String, fsFile: String, automaticReloading: Boolean 
     val numAttrs = GL20.glGetProgrami(programId.get, GL20.GL_ACTIVE_ATTRIBUTES)
     
     val unifsMap = Range(0, numUnifs).map{ i =>
-      val name = GL20.glGetActiveUniform(programId.get, i, 8192)
+      val sizeBuffer = BufferUtils.createIntBuffer(1);
+      val typeBuffer = BufferUtils.createIntBuffer(1);
+      val name = GL20.glGetActiveUniform(programId.get, i, sizeBuffer, typeBuffer)
       val loca = GL20.glGetUniformLocation(programId.get, name)
       println(f"Found uniform $name%-30s   at location $loca%3d")
       name -> loca
     } toMap
     val attrsMap = Range(0, numAttrs).map{ i =>
-      val name = GL20.glGetActiveAttrib(programId.get, i, 8192)
+      val sizeBuffer = BufferUtils.createIntBuffer(1);
+      val typeBuffer = BufferUtils.createIntBuffer(1);
+      val name = GL20.glGetActiveAttrib(programId.get, i, sizeBuffer, typeBuffer)
       val loca = GL20.glGetAttribLocation(programId.get, name)
       println(f"Found attribute $name%-30s at location $loca%3d")
       name -> loca
