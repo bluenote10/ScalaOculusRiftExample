@@ -59,7 +59,7 @@ plotRange <- function(data, from = NULL, to = NULL, filename = NULL) {
 }
 
 
-plotRange(data)
+plotRange(data, filename="all")
 
 
 
