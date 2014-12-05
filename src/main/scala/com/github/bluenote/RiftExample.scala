@@ -106,7 +106,8 @@ object RiftExample {
     */
     
     glfwSwapInterval(1)
-
+    glfwSetWindowPos(window, hmd.WindowsPos.x, hmd.WindowsPos.y)
+    
     glfwShowWindow(window)
     /*
     // new initialization:
