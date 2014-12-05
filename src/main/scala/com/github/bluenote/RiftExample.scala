@@ -20,7 +20,7 @@ import com.oculusvr.capi.OvrVector2i
 import com.oculusvr.capi.OvrVector3f
 import com.oculusvr.capi.Posef
 import com.oculusvr.capi.RenderAPIConfig
-import com.oculusvr.capi.Texture
+import com.oculusvr.capi.GLTexture
 import com.sun.jna.Structure
 
 
@@ -187,9 +187,9 @@ object RiftExample {
     
     val oversampling = 1.0f
     
-    val eyeTextures = new Texture().toArray(2).asInstanceOf[Array[Texture]]
+    val eyeTextures = new GLTexture().toArray(2).asInstanceOf[Array[GLTexture]]
     Range(0, 2).foreach{ eye =>
-      val header = eyeTextures(eye).Header
+      val header = eyeTextures(eye).ogl.Header
       header.TextureSize = hmd.getFovTextureSize(eye, fovPorts(eye), oversampling)
       header.RenderViewport.Size = header.TextureSize
       header.RenderViewport.Pos = new OvrVector2i(0, 0)
@@ -200,18 +200,18 @@ object RiftExample {
     
     
     val framebuffers = Array.tabulate(2){eye => 
-      new FramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h)
+      new FramebufferTexture(eyeTextures(eye).ogl.Header.TextureSize.w, eyeTextures(eye).ogl.Header.TextureSize.h)
       //new MultisampleFramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h, 4)
     }
     
     for (eye <- Range(0, 2)) {
-      eyeTextures(eye).TextureId = framebuffers(eye).textureId
-      println(f"Texture ID of eye $eye: ${eyeTextures(eye).TextureId}")
+      eyeTextures(eye).ogl.TexId = framebuffers(eye).textureId
+      println(f"Texture ID of eye $eye: ${eyeTextures(eye).ogl.TexId}")
     }
 
     val rc = new RenderAPIConfig()
     rc.Header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
-    rc.Header.RTSize = hmd.Resolution
+    rc.Header.BackBufferSize = hmd.Resolution
     rc.Header.Multisample = 1 // does not seem to have any effect
     
     val distortionCaps = 
