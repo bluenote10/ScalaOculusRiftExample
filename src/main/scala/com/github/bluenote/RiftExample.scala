@@ -6,7 +6,6 @@ import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11._
 import org.lwjgl.opengl.GLContext
-
 import com.oculusvr.capi.Hmd
 import com.oculusvr.capi.OvrLibrary
 import com.oculusvr.capi.OvrLibrary.ovrDistortionCaps._
@@ -18,6 +17,9 @@ import com.oculusvr.capi.Posef
 import com.oculusvr.capi.RenderAPIConfig
 import com.oculusvr.capi.Texture
 import com.sun.jna.Structure
+import org.lwjgl.system.linux.opengl.LinuxGLContext
+import org.lwjgl.system.linux.GLFWLinux
+import org.lwjgl.opengl.GL
 
 
 
@@ -92,6 +94,16 @@ object RiftExample {
     } 
     
     glfwMakeContextCurrent(window)
+    
+    /*
+    //val display1 = GL.getFunctionProvider().getFunctionAddress("glXGetCurrentDisplay");
+    val display2 = GLFWLinux.glfwGetX11Display()
+    //val caps = GL.getCapabilities()
+    //println(f"Display1: $display1")
+    println(f"Display2: $display2")
+    LinuxGLContext.createFromCurrent(display2)
+    */
+    
     glfwSwapInterval(1)
 
     glfwShowWindow(window)
