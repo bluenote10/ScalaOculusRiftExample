@@ -45,7 +45,8 @@ object RiftExample {
     
     // set hmd caps
     val hmdCaps = ovrHmdCap_LowPersistence | 
-                  ovrHmdCap_NoVSync | 
+                  //ovrHmdCap_NoVSync | 
+                  ovrHmdCap_ExtendDesktop | 
                   ovrHmdCap_DynamicPrediction 
     hmd.setEnabledCaps(hmdCaps)
     
@@ -217,9 +218,9 @@ object RiftExample {
     val distortionCaps = 
       //ovrDistortionCap_NoSwapBuffers |
       //ovrDistortionCap_FlipInput |
-      //ovrDistortionCap_TimeWarp |
-      ovrDistortionCap_Overdrive |
-      ovrDistortionCap_HqDistortion |
+      ovrDistortionCap_TimeWarp |
+      //ovrDistortionCap_Overdrive |
+      //ovrDistortionCap_HqDistortion |
       ovrDistortionCap_Chromatic | 
       ovrDistortionCap_Vignette
     
@@ -313,8 +314,8 @@ object RiftExample {
     val trackingLogger: Option[RiftTrackingLogger] = None // Some(new RiftTrackingLogger)
     
     // main loop:  
-    while (!Display.isCloseRequested()) {
-    
+    while (!Display.isCloseRequested() && numFrames < 500) {
+      
       val tN = System.currentTimeMillis()
       val dt = tN-tL
       tL = tN
@@ -330,15 +331,16 @@ object RiftExample {
       }
       
       // start frame timing
-      val frameTiming = hmd.beginFrame(0 /*numFrames.toInt*/)
+      val frameTiming = hmd.beginFrame(numFrames.toInt)
       
       trackingLogger.map(_.writeTrackingState(hmd, frameTiming))
       
       // get tracking by getEyePoses
-      val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
+      val headPoses = hmd.getEyePoses(numFrames.toInt, hmdToEyeViewOffsets)
       checkContiguous(headPoses)
 
       // get tracking manually
+      /*
       val predictionTimePoint = frameTiming.ScanoutMidpointSeconds // + 0.002 // frameTiming.ScanoutMidpointSeconds
       val trackingState = hmd.getSensorState(predictionTimePoint)
       val manualHeadPoses = {
@@ -346,7 +348,7 @@ object RiftExample {
         val matPos = Mat4f.translate(pose.Position.x, pose.Position.y, pose.Position.z)
         val matOri = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // LH
         val euler = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).toEuler()
-        println(f"yaw = ${euler.yaw}%12.6f    pitch = ${euler.pitch}%12.6f    roll = ${euler.roll}%12.6f")
+        //println(f"yaw = ${euler.yaw}%12.6f    pitch = ${euler.pitch}%12.6f    roll = ${euler.roll}%12.6f")
         val headPoses = new Posef().toArray(2).asInstanceOf[Array[Posef]]
         for (eye <- 0 until 2) {
           val matEye = Mat4f.translate(-eyeRenderDescs(eye).HmdToEyeViewOffset.x, -eyeRenderDescs(eye).HmdToEyeViewOffset.y, -eyeRenderDescs(eye).HmdToEyeViewOffset.z)
@@ -364,8 +366,9 @@ object RiftExample {
         headPoses
       }
       checkContiguous(manualHeadPoses)
+      */
       
-      val headPosesToUse = manualHeadPoses
+      val headPosesToUse = headPoses
       
       val nextFrameDelta = (frameTiming.NextFrameSeconds-frameTiming.ThisFrameSeconds)*1000
       val scanoutMidpointDelta = (frameTiming.ScanoutMidpointSeconds-frameTiming.ThisFrameSeconds)*1000
@@ -401,10 +404,11 @@ object RiftExample {
       hmd.endFrame(headPosesToUse, eyeTextures)
       GlWrapper.checkGlError("after hmd.endFrame()")
 
-      Display.update()
+      //Display.update()
       //Display.swapBuffers()
       //Display.sync(75)
       numFrames += 1
+      
     }
 
     val t2 = System.currentTimeMillis()
