@@ -1,7 +1,8 @@
 package com.github.bluenote
 
-import org.lwjgl.system.glfw._
-import org.lwjgl.system.glfw.GLFW._
+import org.lwjgl.glfw._
+import org.lwjgl.glfw.GLFW._
+import org.lwjgl.glfw.Callbacks._
 import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11._
@@ -79,7 +80,7 @@ object RiftExample {
    */  
   def initOpenGL(hmd: Hmd): Long = {
     
-    glfwSetErrorCallback(ErrorCallback.Util.getDefault())
+    glfwSetErrorCallback(errorCallbackPrint(System.err))
     
     if (glfwInit() != GL11.GL_TRUE) {
       throw new IllegalStateException("Unable to initialize GLFW")
