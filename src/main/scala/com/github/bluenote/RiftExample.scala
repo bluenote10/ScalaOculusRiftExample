@@ -42,13 +42,6 @@ object RiftExample {
       System.exit(-1)
     }
     
-    // set hmd caps
-    val hmdCaps = ovrHmdCap_LowPersistence | 
-                  //ovrHmdCap_NoVSync | 
-                  ovrHmdCap_ExtendDesktop | 
-                  ovrHmdCap_DynamicPrediction 
-    hmd.setEnabledCaps(hmdCaps)
-    
     hmd
   }
   
@@ -106,7 +99,7 @@ object RiftExample {
     LinuxGLContext.createFromCurrent(display2)
     */
     
-    glfwSwapInterval(1)
+    glfwSwapInterval(0)
     glfwSetWindowPos(window, hmd.WindowsPos.x, hmd.WindowsPos.y)
     
     glfwShowWindow(window)
@@ -214,8 +207,15 @@ object RiftExample {
     val window = initOpenGL(hmd)
     configureOpenGL()
     
+    // TODO: attack to window here?
+    
     // start tracking
-    hmd.configureTracking(ovrTrackingCap_Orientation | ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0)
+    val trackingCaps = 
+      ovrTrackingCap_Orientation |
+      ovrTrackingCap_Position |
+      ovrTrackingCap_MagYawCorrection |
+      0
+    hmd.configureTracking(trackingCaps, 0)
     
     // prepare fovports
     val fovPorts = Array.tabulate(2)(eye => hmd.DefaultEyeFov(eye))
@@ -248,16 +248,21 @@ object RiftExample {
     val rc = new RenderAPIConfig()
     rc.Header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
     rc.Header.BackBufferSize = hmd.Resolution
-    rc.Header.Multisample = 1 // does not seem to have any effect
+    rc.Header.Multisample = 0 // does not seem to have any effect
     
     val distortionCaps = 
       //ovrDistortionCap_NoSwapBuffers |
       //ovrDistortionCap_FlipInput |
-      ovrDistortionCap_TimeWarp |
+      //ovrDistortionCap_TimeWarp |
       //ovrDistortionCap_Overdrive |
       //ovrDistortionCap_HqDistortion |
       ovrDistortionCap_Chromatic | 
-      ovrDistortionCap_Vignette
+      ovrDistortionCap_Vignette |
+      //ovrDistortionCap_LinuxDevFullscreen |
+      ovrDistortionCap_NoRestore |
+      //ovrDistortionCap_SRGB |
+      ovrDistortionCap_ProfileNoTimewarpSpinWaits |
+      0
     
     // configure rendering
     GlWrapper.checkGlError("before configureRendering")
@@ -274,6 +279,13 @@ object RiftExample {
     }
     checkContiguous(hmdToEyeViewOffsets)
     
+    // set hmd caps
+    val hmdCaps = ovrHmdCap_LowPersistence | 
+                  ovrHmdCap_NoVSync | 
+                  //ovrHmdCap_ExtendDesktop | 
+                  //ovrHmdCap_DynamicPrediction |
+                  0
+    hmd.setEnabledCaps(hmdCaps)
     
     // create vertex data + shader + VBO
     val vertexData = generateSceneVertexData(scene = 0)
@@ -351,6 +363,7 @@ object RiftExample {
     
     // main loop:  
     while (glfwWindowShouldClose(window) == GL_FALSE) {
+      //glfwMakeContextCurrent(window)
     
       val tN = System.currentTimeMillis()
       val dt = tN-tL
@@ -440,7 +453,7 @@ object RiftExample {
       hmd.endFrame(headPosesToUse, eyeTextures)
       GlWrapper.checkGlError("after hmd.endFrame()")
 
-      glfwSwapBuffers(window);
+      //glfwSwapBuffers(window);
       glfwPollEvents();
       numFrames += 1
       
