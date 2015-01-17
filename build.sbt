@@ -11,7 +11,7 @@ mainClass := Some("com.github.bluenote.RiftExample")
 // Library dependencies:
 // --------------------------------
 
-// libraryDependencies += "org.saintandreas" % "jovr" % "0.4.4.0"
+libraryDependencies += "org.saintandreas" % "jovr" % "0.4.4.0"
 
 
 // --------------------------------
