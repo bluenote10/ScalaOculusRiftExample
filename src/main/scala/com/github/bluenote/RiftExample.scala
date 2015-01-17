@@ -7,47 +7,37 @@ import org.lwjgl.system.MemoryUtil.NULL
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11._
 import org.lwjgl.opengl.GLContext
-import com.oculusvr.capi.Hmd
-import com.oculusvr.capi.OvrLibrary
-import com.oculusvr.capi.OvrLibrary.ovrDistortionCaps._
-import com.oculusvr.capi.OvrLibrary.ovrTrackingCaps._
-import com.oculusvr.capi.OvrLibrary.ovrHmdCaps._
-import com.oculusvr.capi.OvrVector2i
-import com.oculusvr.capi.OvrVector3f
-import com.oculusvr.capi.Posef
-import com.oculusvr.capi.RenderAPIConfig
-import com.oculusvr.capi.Texture
-import com.sun.jna.Structure
+import de.fruitfly.ovr.OculusRift
 import org.lwjgl.system.linux.opengl.LinuxGLContext
 import org.lwjgl.system.linux.GLFWLinux
 import org.lwjgl.opengl.GL
-
-
+import de.fruitfly.ovr.structs.Posef
+import de.fruitfly.ovr.structs.GLConfig
+import de.fruitfly.ovr.enums.EyeType
 
 object RiftExample {
 
   /**
    * Initializes libOVR and returns the Hmd instance
    */
-  def initHmd(): Hmd = {
+  def initHmd(): OculusRift = {
 
     // OvrLibrary.INSTANCE.ovr_Initialize() // is this actually still needed?
-    Hmd.initialize()
+    val hmd = new OculusRift()
+    hmd.init()
     
-    val hmd = 
-      //Hmd.createDebug(ovrHmd_DK1)
-      Hmd.create(0)
     if (hmd == null) {
       println("Oculus Rift HMD not found.")
       System.exit(-1)
     }
     
     // set hmd caps
+    /*
     val hmdCaps = ovrHmdCap_LowPersistence | 
                   ovrHmdCap_NoVSync | 
                   ovrHmdCap_DynamicPrediction 
     hmd.setEnabledCaps(hmdCaps)
-    
+    */
     hmd
   }
   
@@ -77,7 +67,7 @@ object RiftExample {
    * depending on how I initialize OpenGL (probably a context issue, but this was with the old SDK). 
    * To solve the issue I now initialize OpenGL similar to LwjglApp.run. 
    */  
-  def initOpenGL(hmd: Hmd): Long = {
+  def initOpenGL(): Long = {
     
     glfwSetErrorCallback(errorCallbackPrint(System.err))
     
@@ -89,7 +79,7 @@ object RiftExample {
     //glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
     //glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
     
-    val window = glfwCreateWindow(hmd.Resolution.w, hmd.Resolution.h, "Rift Example", NULL, NULL)
+    val window = glfwCreateWindow(1920, 1080, "Rift Example", NULL, NULL)
     if (window == NULL) {
       throw new RuntimeException("Failed to create the GLFW window")
     } 
@@ -106,7 +96,8 @@ object RiftExample {
     */
     
     glfwSwapInterval(1)
-    glfwSetWindowPos(window, hmd.WindowsPos.x, hmd.WindowsPos.y)
+    //glfwSetWindowPos(window, hmd.WindowsPos.x, hmd.WindowsPos.y)
+    glfwSetWindowPos(window, 1920, 0)
     
     glfwShowWindow(window)
     /*
@@ -207,21 +198,23 @@ object RiftExample {
   def main(args: Array[String]) {
     
     // initialize the Oculus Rift
-    val hmd = initHmd() 
+    val hmd = initHmd()
+    val hmdDesc = hmd.getHmdDesc()
     
     // initialize and configure OpenGL
-    val window = initOpenGL(hmd)
+    val window = initOpenGL()
     configureOpenGL()
     
     // start tracking
-    hmd.configureTracking(ovrTrackingCap_Orientation | ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0)
+    println(hmd.getInitializationStatus())
+    //hmd.configureTracking(ovrTrackingCap_Orientation | ovrTrackingCap_Position | ovrTrackingCap_MagYawCorrection, 0)
     
-    // prepare fovports
-    val fovPorts = Array.tabulate(2)(eye => hmd.DefaultEyeFov(eye))
-    val projections = Array.tabulate(2)(eye => Mat4f.createFromRowMajorArray(Hmd.getPerspectiveProjection(fovPorts(eye), 0.0001f, 10000f, true).M))
     
     val oversampling = 1.0f
+    val textureSizes = hmd.getFovTextureSize(hmdDesc.DefaultEyeFov(0), hmdDesc.DefaultEyeFov(1), oversampling)
+
     
+    /*
     val eyeTextures = new Texture().toArray(2).asInstanceOf[Array[Texture]]
     Range(0, 2).foreach{ eye =>
       val header = eyeTextures(eye).Header
@@ -232,18 +225,31 @@ object RiftExample {
     }
     // the eyeTextures must be contiguous, since they are passed to endFrame
     checkContiguous(eyeTextures)
-    
+    */
     
     val framebuffers = Array.tabulate(2){eye => 
-      new FramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h)
-      //new MultisampleFramebufferTexture(eyeTextures(eye).Header.TextureSize.w, eyeTextures(eye).Header.TextureSize.h, 4)
+      eye match {
+        case 0 => new FramebufferTexture(textureSizes.LeftFovTextureResolution.w, textureSizes.LeftFovTextureResolution.h)
+        case 1 => new FramebufferTexture(textureSizes.RightFovTextureResolution.w, textureSizes.RightFovTextureResolution.h)
+      }
     }
     
+    val glConfig = new GLConfig()
+    glConfig.useLowPersistence = true
+    glConfig.useTimewarp = true
+    glConfig.VSyncEnabled = true
+    glConfig.useDisplayOverdrive = false
+    glConfig.TexId = framebuffers(0).textureId
+    glConfig.TexId2 = framebuffers(1).textureId
+    
+    /*
     for (eye <- Range(0, 2)) {
       eyeTextures(eye).TextureId = framebuffers(eye).textureId
       println(f"Texture ID of eye $eye: ${eyeTextures(eye).TextureId}")
     }
+    */
 
+    /*
     val rc = new RenderAPIConfig()
     rc.Header.API = OvrLibrary.ovrRenderAPIType.ovrRenderAPI_OpenGL
     rc.Header.RTSize = hmd.Resolution
@@ -257,14 +263,25 @@ object RiftExample {
       ovrDistortionCap_HqDistortion |
       ovrDistortionCap_Chromatic | 
       ovrDistortionCap_Vignette
+    */
     
     // configure rendering
     GlWrapper.checkGlError("before configureRendering")
-    val eyeRenderDescs = hmd.configureRendering(rc, distortionCaps, fovPorts)
+    //val eyeRenderDescs = hmd.configureRendering(rc, distortionCaps, fovPorts)
+    val eyeRenderDescs = hmd.configureRenderingDualTexture(textureSizes.LeftFovTextureResolution, textureSizes.RightFovTextureResolution, hmdDesc.Resolution, glConfig, hmdDesc.DefaultEyeFov(0), hmdDesc.DefaultEyeFov(1))
     GlWrapper.checkGlError("after configureRendering")
+
+    // prepare fovports
+    val fovPorts = Array.tabulate(2)(eye => hmdDesc.DefaultEyeFov(eye))
+    val M = hmd.getMatrix4fProjection(fovPorts(0), 0.0001f, 10000f)
+    println("matrix: " + fovPorts(0))
+    println("matrix: " + hmd.getMatrix4fProjection(fovPorts(0), 0.0001f, 10000f))
+    val projections = Array.tabulate(2)(eye => Mat4f.createFromRowMajorArray(hmd.getMatrix4fProjection(fovPorts(eye), 0.0001f, 10000f).M.flatten))
+
     
     // hmdToEyeViewOffset is an Array[OvrVector3f] and is needed in the GetEyePoses call
     // we can prepare this here. Note: must be a contiguous structure
+    /*
     val hmdToEyeViewOffsets = new OvrVector3f().toArray(2).asInstanceOf[Array[OvrVector3f]]
     Range(0, 2).foreach { eye =>
       hmdToEyeViewOffsets(eye).x = eyeRenderDescs(eye).HmdToEyeViewOffset.x
@@ -272,7 +289,7 @@ object RiftExample {
       hmdToEyeViewOffsets(eye).z = eyeRenderDescs(eye).HmdToEyeViewOffset.z
     }
     checkContiguous(hmdToEyeViewOffsets)
-    
+    */
     
     // create vertex data + shader + VBO
     val vertexData = generateSceneVertexData(scene = 0)
@@ -346,7 +363,7 @@ object RiftExample {
     val t1 = System.currentTimeMillis()
     var tL = t1
     
-    val trackingLogger: Option[RiftTrackingLogger] = None // Some(new RiftTrackingLogger)
+    //val trackingLogger: Option[RiftTrackingLogger] = None // Some(new RiftTrackingLogger)
     
     // main loop:  
     while (glfwWindowShouldClose(window) == GL_FALSE) {
@@ -360,48 +377,21 @@ object RiftExample {
       GlWrapper.checkGlError("beginning of main loop")
       
       // deal with HSW
+      /*
       val hswState = hmd.getHSWDisplayState()
       if (hswState.Displayed != 0) {
         hmd.dismissHSWDisplay()
       }
+      */
       
       // start frame timing
-      val frameTiming = hmd.beginFrame(0 /*numFrames.toInt*/)
+      val frameTiming = hmd.beginFrameGetTiming()
       
-      trackingLogger.map(_.writeTrackingState(hmd, frameTiming))
+      //trackingLogger.map(_.writeTrackingState(hmd, frameTiming))
       
       // get tracking by getEyePoses
-      val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
-      checkContiguous(headPoses)
-
-      // get tracking manually
-      val predictionTimePoint = frameTiming.ScanoutMidpointSeconds // + 0.002 // frameTiming.ScanoutMidpointSeconds
-      val trackingState = hmd.getSensorState(predictionTimePoint)
-      val manualHeadPoses = {
-        val pose = trackingState.HeadPose.Pose
-        val matPos = Mat4f.translate(pose.Position.x, pose.Position.y, pose.Position.z)
-        val matOri = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).castToOrientationMatrix // LH
-        val euler = new Quaternion(pose.Orientation.x, pose.Orientation.y, pose.Orientation.z, pose.Orientation.w).toEuler()
-        println(f"yaw = ${euler.yaw}%12.6f    pitch = ${euler.pitch}%12.6f    roll = ${euler.roll}%12.6f")
-        val headPoses = new Posef().toArray(2).asInstanceOf[Array[Posef]]
-        for (eye <- 0 until 2) {
-          val matEye = Mat4f.translate(-eyeRenderDescs(eye).HmdToEyeViewOffset.x, -eyeRenderDescs(eye).HmdToEyeViewOffset.y, -eyeRenderDescs(eye).HmdToEyeViewOffset.z)
-          val V = matPos * matOri * matEye // reverse transformation
-          val origin = V * Vec4f(0,0,0,1)
-          headPoses(eye).Position.x = origin.x
-          headPoses(eye).Position.y = origin.y
-          headPoses(eye).Position.z = origin.z
-          headPoses(eye).Orientation.x = pose.Orientation.x
-          headPoses(eye).Orientation.y = pose.Orientation.y
-          headPoses(eye).Orientation.z = pose.Orientation.z
-          headPoses(eye).Orientation.w = pose.Orientation.w
-          //println(f"$eye    orig x = ${pose.Position.x}   new x = ${headPoses(eye).Position.x}    orig y = ${pose.Position.y}   new y = ${headPoses(eye).Position.y}    orig z = ${pose.Position.z}   new z = ${headPoses(eye).Position.z}")
-        }
-        headPoses
-      }
-      checkContiguous(manualHeadPoses)
-      
-      val headPosesToUse = manualHeadPoses
+      //val headPoses = hmd.getEyePoses(0 /*numFrames.toInt*/, hmdToEyeViewOffsets)
+      //checkContiguous(headPoses)
       
       val nextFrameDelta = (frameTiming.NextFrameSeconds-frameTiming.ThisFrameSeconds)*1000
       val scanoutMidpointDelta = (frameTiming.ScanoutMidpointSeconds-frameTiming.ThisFrameSeconds)*1000
@@ -410,10 +400,11 @@ object RiftExample {
 
       // now iterate eyes
       for (i <- 0 until 2) {
-        val eye = hmd.EyeRenderOrder(i)
+        val eyeT = hmdDesc.EyeRenderOrder(i)
+        val eye = if (eyeT == EyeType.ovrEye_Left) 0 else 1
         val P = projections(eye)
 
-        val pose = headPosesToUse(eye)
+        val pose = hmd.getEyePose(eyeT)
         
         //println(f"tracking position: x = ${pose.Position.x}%8.3f    y = ${pose.Position.y}%8.3f    z = ${pose.Position.z}%8.3f")
 
@@ -434,7 +425,7 @@ object RiftExample {
       }
       
       GlWrapper.checkGlError("before hmd.endFrame()")
-      hmd.endFrame(headPosesToUse, eyeTextures)
+      hmd.endFrame()
       GlWrapper.checkGlError("after hmd.endFrame()")
 
       glfwSwapBuffers(window);
@@ -445,7 +436,7 @@ object RiftExample {
     val t2 = System.currentTimeMillis()
     println(f"\n *** average framerate: ${numFrames.toDouble / (t2-t1) * 1000}%.1f fps")
 
-    trackingLogger.map(_.close())
+    //trackingLogger.map(_.close())
     
     // destroy Hmd
     hmd.destroy()
@@ -456,11 +447,11 @@ object RiftExample {
     glfwDestroyWindow(window)
     glfwTerminate()
     println("Display destroyed")
-    
+
     System.exit(0)
   }
   
-  
+  /*
   private def checkContiguous[T <: Structure](ts: Array[T]) {
     val first = ts(0).getPointer
     val size = ts(0).size
@@ -468,7 +459,7 @@ object RiftExample {
     val secondActual = ts(1).getPointer.getPointer(0)
     assert(secondCalc == secondActual, "array must be contiguous in memory.")
   }
- 
+  */
 }
 
 

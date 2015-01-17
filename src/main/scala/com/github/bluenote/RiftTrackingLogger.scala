@@ -1,5 +1,6 @@
 package com.github.bluenote
 
+/*
 import com.oculusvr.capi.Hmd
 import com.oculusvr.capi.FrameTiming
 import com.oculusvr.capi.Posef
@@ -42,3 +43,5 @@ class RiftTrackingLogger() {
   }
   
 }
+
+*/
