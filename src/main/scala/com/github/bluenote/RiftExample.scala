@@ -95,7 +95,7 @@ object RiftExample {
     LinuxGLContext.createFromCurrent(display2)
     */
     
-    glfwSwapInterval(1)
+    glfwSwapInterval(0)
     //glfwSetWindowPos(window, hmd.WindowsPos.x, hmd.WindowsPos.y)
     glfwSetWindowPos(window, 1920, 0)
     
@@ -237,7 +237,7 @@ object RiftExample {
     val glConfig = new GLConfig()
     glConfig.useLowPersistence = true
     glConfig.useTimewarp = true
-    glConfig.VSyncEnabled = true
+    glConfig.VSyncEnabled = false
     glConfig.useDisplayOverdrive = false
     glConfig.TexId = framebuffers(0).textureId
     glConfig.TexId2 = framebuffers(1).textureId
@@ -428,7 +428,7 @@ object RiftExample {
       hmd.endFrame()
       GlWrapper.checkGlError("after hmd.endFrame()")
 
-      glfwSwapBuffers(window);
+      //glfwSwapBuffers(window);
       glfwPollEvents();
       numFrames += 1
     }
